@@ -17,6 +17,8 @@ nav_order: 3
 4. Viettel gọi endpoint kết quả kèm `Authorization: Bearer`: `HandleCallbackResultAsync(bearer, json)` trả `(Response, Outcome)`.
 5. Ghi `Response` (`HttpStatus` + `JsonBody`, `application/json`) nguyên văn cho Viettel. Khi `Outcome` khác null, xử lý kết cục (`Succeeded` có `Signatures`, hoặc `Rejected`/`TimedOut`/`Failed`).
 
+SDK đánh số tài liệu 1..n (số JSON) theo thứ tự trong yêu cầu khi gửi `signHash`; khi nhận kết quả, `document_id` (số hoặc chuỗi số) được ánh xạ ngược về `DocumentId` của ứng dụng, và `Signatures` luôn theo thứ tự đã gửi. Id ngoài khoảng, không phải số, trùng hoặc thiếu bị từ chối (`status_code` khác `"00"`, giao dịch vẫn còn chờ).
+
 ## Bảo đảm
 
 - Input sai, token hết hạn hoặc sai, `transaction_id` lạ: trả `status_code` khác `"00"` (HTTP 200), không ném lỗi, không lộ chi tiết. "Không ném lỗi" áp dụng cho **đầu vào xấu**.

@@ -74,7 +74,7 @@ public class RefreshOn401Tests
         await using var fake = await FakeMySignServer.StartAsync();
         fake.Scenario.RequireBearer = true;
         var pipeline = TestPipeline.Create(fake.BaseUrl);
-        var request = new SignHashWireRequest("cred-001", [("doc-1", "RG9jMQ==", new byte[] { 1, 2, 3 })], "RGVzYw==", 0, null);
+        var request = new SignHashWireRequest("cred-001", [("RG9jMQ==", new byte[] { 1, 2, 3 })], "RGVzYw==", 0, null);
 
         await pipeline.Wire.SignHashAsync(Creds, request, CancellationToken.None);
         Assert.Equal(1, fake.LoginCount);
@@ -198,7 +198,7 @@ public class RefreshOn401Tests
             ? new TaskCanceledException("timeout", new TimeoutException())
             : new HttpRequestException("connection reset"));
         var pipeline = TestPipeline.Create(fake.BaseUrl, handler, maxAttempts: 3);
-        var request = new SignHashWireRequest("cred-001", [("doc-1", "RG9jMQ==", new byte[] { 1, 2, 3 })], "RGVzYw==", 0, null);
+        var request = new SignHashWireRequest("cred-001", [("RG9jMQ==", new byte[] { 1, 2, 3 })], "RGVzYw==", 0, null);
 
         var ex = await Assert.ThrowsAsync<MySignException>(
             () => pipeline.Wire.SignHashAsync(Creds, request, CancellationToken.None));

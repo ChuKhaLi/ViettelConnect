@@ -28,7 +28,7 @@ SDK **chỉ ký mã băm SHA-256** và trả chữ ký thô cùng chuỗi chứn
 
 ## Lưu ý
 
-- `DocumentId` do ứng dụng đặt, dùng để ghép chữ ký khi ký nhiều tài liệu trong một lần xác nhận.
+- `DocumentId` do ứng dụng đặt, dùng để ghép chữ ký khi ký nhiều tài liệu trong một lần xác nhận. Giá trị này không được gửi đi: SDK tự đánh số tài liệu 1..n theo thứ tự trong yêu cầu và ánh xạ ngược khi nhận chữ ký.
 - Chữ ký là RSA PKCS#1 v1.5 trên SHA-256 (thuật toán ký `rsaEncryption`). Chưa kiểm chứng với MySign thật; test `RealAccountSmokeTests` sẽ kiểm điều này khi có tài khoản.
 - Mỗi lần gọi ký là một yêu cầu xác nhận trên điện thoại người ký; gộp nhiều tài liệu vào một yêu cầu khi cần.
 - Repo này không chứa mã phụ thuộc thư viện PDF nào.

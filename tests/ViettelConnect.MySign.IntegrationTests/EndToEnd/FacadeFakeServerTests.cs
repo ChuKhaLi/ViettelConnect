@@ -62,6 +62,17 @@ public class FacadeFakeServerTests
     private static HashDocumentDto Doc(string id) =>
         new(id, "Biên bản thí nghiệm máy biến áp", SHA256.HashData(Encoding.UTF8.GetBytes(id)));
 
+    private static void AssertWireDocumentIds(JsonDocument sent, int count)
+    {
+        var ids = sent.RootElement.GetProperty("documents").EnumerateArray().Select(d => d.GetProperty("document_id")).ToArray();
+        Assert.Equal(count, ids.Length);
+        for (var i = 0; i < ids.Length; i++)
+        {
+            Assert.Equal(JsonValueKind.Number, ids[i].ValueKind);
+            Assert.Equal(i + 1, ids[i].GetInt32());
+        }
+    }
+
     private static byte[] ExpectedSignature(HashDocumentDto doc) =>
         FakeMySignServer.SignatureFor(Convert.ToBase64String(doc.Sha256));
 
@@ -114,6 +125,7 @@ public class FacadeFakeServerTests
         using (var sent = Assert.Single(fake.RequestsFor("signHash")).Json())
         {
             Assert.Equal(2, sent.RootElement.GetProperty("async").GetInt32());
+            AssertWireDocumentIds(sent, 2);
         }
 
         Assert.Equal(2, fake.RequestsFor("requests/status").Count);
@@ -192,8 +204,8 @@ public class FacadeFakeServerTests
             {
                 results = new[]
                 {
-                    new { document_id = "b", signature = Convert.ToBase64String(ExpectedSignature(docs[1])) },
-                    new { document_id = "a", signature = Convert.ToBase64String(ExpectedSignature(docs[0])) },
+                    new { document_id = 2, signature = Convert.ToBase64String(ExpectedSignature(docs[1])) },
+                    new { document_id = 1, signature = Convert.ToBase64String(ExpectedSignature(docs[0])) },
                 },
             },
         });

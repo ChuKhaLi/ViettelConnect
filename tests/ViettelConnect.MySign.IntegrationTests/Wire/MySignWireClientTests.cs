@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using ViettelConnect.MySign.Application.Abstractions;
@@ -51,7 +52,7 @@ public class MySignWireClientTests
     private static SignHashWireRequest SignRequest(int asyncCode, string? sad = null, int count = 2)
     {
         var docs = Enumerable.Range(1, count)
-            .Select(i => ($"doc-{i}", $"RG9j{i}", new byte[] { (byte)i, 0xAA, 0xBB }))
+            .Select(i => ($"RG9j{i}", new byte[] { (byte)i, 0xAA, 0xBB }))
             .ToArray();
         return new SignHashWireRequest("cred-001", docs, "RGVzYw==", asyncCode, sad);
     }
@@ -221,7 +222,12 @@ public class MySignWireClientTests
         Assert.Equal(2, hashes.Length);
         Assert.Equal(2, docs.Length);
         Assert.Equal(Convert.ToBase64String(new byte[] { 1, 0xAA, 0xBB }), hashes[0]);
-        Assert.Equal("doc-1", docs[0].GetProperty("document_id").GetString());
+        for (var i = 0; i < docs.Length; i++)
+        {
+            Assert.Equal(JsonValueKind.Number, docs[i].GetProperty("document_id").ValueKind);
+            Assert.Equal(i + 1, docs[i].GetProperty("document_id").GetInt32());
+        }
+
         Assert.Equal("RG9j1", docs[0].GetProperty("document_name").GetString());
         Assert.Equal("RGVzYw==", root.GetProperty("description").GetString());
         Assert.Equal("2.16.840.1.101.3.4.2.1", root.GetProperty("hashAlgo").GetString());

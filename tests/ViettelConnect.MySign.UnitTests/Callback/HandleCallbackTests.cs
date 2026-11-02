@@ -75,6 +75,10 @@ public sealed class HandleCallbackTests
         return crlf ? b64[..6] + "\r\n" + b64[6..12] + "\r\n" + b64[12..] : b64;
     }
 
+    /// <summary>"2" -> số JSON 2; "'2" -> chuỗi "2"; còn lại giữ nguyên chuỗi (id lạ).</summary>
+    private static object WireId(string id) =>
+        id.StartsWith('\'') ? id[1..] : int.TryParse(id, out var n) ? n : id;
+
     private static string ResultBody(string tx, string status, params (string Id, string Signature)[] results) =>
         JsonSerializer.Serialize(new
         {
@@ -83,7 +87,7 @@ public sealed class HandleCallbackTests
             {
                 action_timestamp = 1735543766,
                 signature_timestamp = 1735543766,
-                results = results.Select(r => new { document_id = r.Id, signature = r.Signature }).ToArray(),
+                results = results.Select(r => new { document_id = WireId(r.Id), signature = r.Signature }).ToArray(),
             },
         });
 
@@ -216,7 +220,7 @@ public sealed class HandleCallbackTests
         var tokens = new ThrowingTokenStore(throwOnIssue: false, throwOnValidate: failOn == "validate");
         var handler = new HandleCallbackResult(tokens, new ThrowingPendingStore(failOn));
 
-        var (response, outcome) = await handler.ExecuteAsync("tok", ResultBody("tx-1", "1", ("d1", Sig("s1"))), CancellationToken.None);
+        var (response, outcome) = await handler.ExecuteAsync("tok", ResultBody("tx-1", "1", ("1", Sig("s1"))), CancellationToken.None);
 
         AssertGenericServerError(response);
         Assert.Null(outcome);
@@ -259,7 +263,7 @@ public sealed class HandleCallbackTests
         var result = new HandleCallbackResult(canceling, new ThrowingPendingStore("none"));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => result.ExecuteAsync("tok", ResultBody("tx-1", "1", ("d1", Sig("s1"))), cts.Token));
+            () => result.ExecuteAsync("tok", ResultBody("tx-1", "1", ("1", Sig("s1"))), cts.Token));
     }
 
     private sealed class CancelingTokenStore : ICallbackTokenStore
@@ -284,7 +288,7 @@ public sealed class HandleCallbackTests
         var token = await h.TokenFor("cb-a", "secret-a");
 
         // Viettel gửi kết quả theo thứ tự khác và chữ ký có CRLF.
-        var body = ResultBody("tx-1", "1", ("d2", Sig("signature-two", crlf: true)), ("d1", Sig("signature-one", crlf: true)));
+        var body = ResultBody("tx-1", "1", ("2", Sig("signature-two", crlf: true)), ("1", Sig("signature-one", crlf: true)));
         var (response, outcome) = await h.Result.ExecuteAsync(token, body, CancellationToken.None);
 
         Assert.Equal(200, response.HttpStatus);
@@ -308,7 +312,7 @@ public sealed class HandleCallbackTests
         var h = new Harness();
         await h.Seed("labA", "tx-1", "d1");
         var token = await h.TokenFor("cb-a", "secret-a");
-        var body = ResultBody("tx-1", "1", ("d1", Sig("s")));
+        var body = ResultBody("tx-1", "1", ("1", Sig("s")));
         await h.Result.ExecuteAsync(token, body, CancellationToken.None);
 
         var (response, outcome) = await h.Result.ExecuteAsync(token, body, CancellationToken.None);
@@ -359,7 +363,7 @@ public sealed class HandleCallbackTests
         var tokenA = await h.TokenFor("cb-a", "secret-a");
 
         var (response, outcome) = await h.Result.ExecuteAsync(
-            tokenA, ResultBody("tx-b", "1", ("d1", Sig("s"))), CancellationToken.None);
+            tokenA, ResultBody("tx-b", "1", ("1", Sig("s"))), CancellationToken.None);
 
         Assert.Equal(200, response.HttpStatus);
         Assert.NotEqual("00", StatusCode(response));
@@ -369,7 +373,7 @@ public sealed class HandleCallbackTests
         // Token của labB thì hoàn tất được.
         var tokenB = await h.TokenFor("cb-b", "secret-b");
         var (ok, outcomeB) = await h.Result.ExecuteAsync(
-            tokenB, ResultBody("tx-b", "1", ("d1", Sig("s"))), CancellationToken.None);
+            tokenB, ResultBody("tx-b", "1", ("1", Sig("s"))), CancellationToken.None);
         Assert.Equal("00", StatusCode(ok));
         Assert.Equal("labB", outcomeB!.TenantKey);
     }
@@ -383,7 +387,7 @@ public sealed class HandleCallbackTests
         h.Time.Advance(Lifetime + TimeSpan.FromSeconds(1));
 
         var (response, outcome) = await h.Result.ExecuteAsync(
-            token, ResultBody("tx-1", "1", ("d1", Sig("s"))), CancellationToken.None);
+            token, ResultBody("tx-1", "1", ("1", Sig("s"))), CancellationToken.None);
 
         Assert.Equal(200, response.HttpStatus);
         Assert.NotEqual("00", StatusCode(response));
@@ -401,7 +405,7 @@ public sealed class HandleCallbackTests
         await h.Seed("labA", "tx-1", "d1");
 
         var (response, outcome) = await h.Result.ExecuteAsync(
-            token, ResultBody("tx-1", "1", ("d1", Sig("s"))), CancellationToken.None);
+            token, ResultBody("tx-1", "1", ("1", Sig("s"))), CancellationToken.None);
 
         Assert.Equal(200, response.HttpStatus);
         Assert.NotEqual("00", StatusCode(response));
@@ -415,7 +419,7 @@ public sealed class HandleCallbackTests
         var token = await h.TokenFor("cb-a", "secret-a");
 
         var (response, outcome) = await h.Result.ExecuteAsync(
-            token, ResultBody("nope", "1", ("d1", Sig("s"))), CancellationToken.None);
+            token, ResultBody("nope", "1", ("1", Sig("s"))), CancellationToken.None);
 
         Assert.Equal(200, response.HttpStatus);
         Assert.NotEqual("00", StatusCode(response));
@@ -457,17 +461,72 @@ public sealed class HandleCallbackTests
         var token = await h.TokenFor("cb-a", "secret-a");
         var results = scenario switch
         {
-            "missing" => new[] { ("d1", Sig("a")) },
-            "extra" => new[] { ("d1", Sig("a")), ("d2", Sig("b")), ("d3", Sig("c")) },
-            "wrong-id" => new[] { ("d1", Sig("a")), ("dX", Sig("b")) },
-            "duplicate" => new[] { ("d1", Sig("a")), ("d1", Sig("b")) },
-            _ => new[] { ("d1", Sig("a")), ("d2", "***not base64***") },
+            "missing" => new[] { ("1", Sig("a")) },
+            "extra" => new[] { ("1", Sig("a")), ("2", Sig("b")), ("3", Sig("c")) },
+            "wrong-id" => new[] { ("1", Sig("a")), ("9", Sig("b")) },
+            "duplicate" => new[] { ("1", Sig("a")), ("1", Sig("b")) },
+            _ => new[] { ("1", Sig("a")), ("2", "***not base64***") },
         };
 
         var (response, outcome) = await h.Result.ExecuteAsync(
             token, ResultBody("tx-1", "1", results), CancellationToken.None);
 
         Assert.Equal(200, response.HttpStatus);
+        Assert.NotEqual("00", StatusCode(response));
+        Assert.Null(outcome);
+        Assert.NotNull(await h.Pending.FindAsync("labA", "tx-1", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Numeric_string_ids_map_back_to_pending_document_ids_out_of_order()
+    {
+        var h = new Harness();
+        await h.Seed("labA", "tx-1", "d1", "d2", "d3");
+        var token = await h.TokenFor("cb-a", "secret-a");
+
+        var body = ResultBody("tx-1", "1", ("'3", Sig("three")), ("1", Sig("one")), ("'2", Sig("two")));
+        var (response, outcome) = await h.Result.ExecuteAsync(token, body, CancellationToken.None);
+
+        Assert.Equal("00", StatusCode(response));
+        Assert.NotNull(outcome);
+        Assert.Equal(["d1", "d2", "d3"], outcome.Signatures.Select(s => s.DocumentId));
+        Assert.Equal(["one", "two", "three"], outcome.Signatures.Select(s => Encoding.UTF8.GetString(s.Signature)));
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("3")]
+    [InlineData("'0")]
+    [InlineData("'3")]
+    [InlineData("abc")]
+    [InlineData("'abc")]
+    [InlineData("-1")]
+    [InlineData("d1")]
+    public async Task Out_of_range_or_non_numeric_wire_id_is_rejected_and_pending_kept(string badId)
+    {
+        var h = new Harness();
+        await h.Seed("labA", "tx-1", "d1", "d2");
+        var token = await h.TokenFor("cb-a", "secret-a");
+
+        var (response, outcome) = await h.Result.ExecuteAsync(
+            token, ResultBody("tx-1", "1", ("1", Sig("a")), (badId, Sig("b"))), CancellationToken.None);
+
+        Assert.Equal(200, response.HttpStatus);
+        Assert.NotEqual("00", StatusCode(response));
+        Assert.Null(outcome);
+        Assert.NotNull(await h.Pending.FindAsync("labA", "tx-1", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Same_id_as_number_and_string_counts_as_duplicate()
+    {
+        var h = new Harness();
+        await h.Seed("labA", "tx-1", "d1", "d2");
+        var token = await h.TokenFor("cb-a", "secret-a");
+
+        var (response, outcome) = await h.Result.ExecuteAsync(
+            token, ResultBody("tx-1", "1", ("1", Sig("a")), ("'1", Sig("b"))), CancellationToken.None);
+
         Assert.NotEqual("00", StatusCode(response));
         Assert.Null(outcome);
         Assert.NotNull(await h.Pending.FindAsync("labA", "tx-1", CancellationToken.None));
@@ -486,7 +545,7 @@ public sealed class HandleCallbackTests
 
         var client = new CallbackClient("labA", "cb-a", "secret-a");
         var (response, outcome) = await h.Result.ExecuteAsync(
-            token, ResultBody("tx-1", "1", ("d1", Sig("SECRET-SIGNATURE-BYTES"))), CancellationToken.None);
+            token, ResultBody("tx-1", "1", ("1", Sig("SECRET-SIGNATURE-BYTES"))), CancellationToken.None);
 
         Assert.DoesNotContain("secret-a", client.ToString());
         Assert.DoesNotContain(token, tokenResponse.ToString());
@@ -560,7 +619,7 @@ public sealed class HandleCallbackTests
         var h = new Harness();
         await h.Seed("labA", "tx-1", "d1");
         var token = await h.TokenFor("cb-a", "secret-a");
-        var body = ResultBody("tx-1", "1", ("d1", Sig("s")));
+        var body = ResultBody("tx-1", "1", ("1", Sig("s")));
         var handler = new HandleCallbackResult(h.Tokens, new GatedPendingStore(h.Pending));
 
         var results = await Task.WhenAll(

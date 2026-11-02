@@ -251,6 +251,17 @@ internal sealed class FakeMySignServer : IAsyncDisposable
             using var doc = JsonDocument.Parse(body);
             var hashes = doc.RootElement.GetProperty("hash").EnumerateArray().Select(e => e.GetString()!).ToList();
             var asyncCode = doc.RootElement.GetProperty("async").GetInt32();
+
+            // Như máy chủ thật (document_id kiểu số): chỉ nhận số nguyên 1..n theo đúng thứ tự gửi.
+            var ids = doc.RootElement.GetProperty("documents").EnumerateArray().Select(d => d.GetProperty("document_id")).ToList();
+            var wellFormed = ids.Count == hashes.Count
+                && ids.Select((id, i) => id.ValueKind == JsonValueKind.Number && id.TryGetInt32(out var n) && n == i + 1).All(ok => ok);
+            if (!wellFormed)
+            {
+                await Write(ctx, 400, "{\"error\":\"invalid_request\",\"error_description\":\"document_id must be a number 1..n\"}");
+                return;
+            }
+
             if (asyncCode == 0)
             {
                 var signed = self!._scenario.DropLastSignature ? hashes.Take(hashes.Count - 1) : hashes;
