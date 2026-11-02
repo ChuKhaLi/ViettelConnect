@@ -77,7 +77,10 @@ public sealed class HandleCallbackTests
 
     /// <summary>"2" -> số JSON 2; "'2" -> chuỗi "2"; còn lại giữ nguyên chuỗi (id lạ).</summary>
     private static object WireId(string id) =>
-        id.StartsWith('\'') ? id[1..] : int.TryParse(id, out var n) ? n : id;
+        id.StartsWith('\'') ? id[1..]
+        : id.Length > 1 && id[0] == '0' ? id
+        : long.TryParse(id, out var n) ? n
+        : double.TryParse(id, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : id;
 
     private static string ResultBody(string tx, string status, params (string Id, string Signature)[] results) =>
         JsonSerializer.Serialize(new
@@ -502,6 +505,11 @@ public sealed class HandleCallbackTests
     [InlineData("'abc")]
     [InlineData("-1")]
     [InlineData("d1")]
+    [InlineData("99999999999")]
+    [InlineData("'99999999999")]
+    [InlineData("01")]
+    [InlineData("'01")]
+    [InlineData("1.5")]
     public async Task Out_of_range_or_non_numeric_wire_id_is_rejected_and_pending_kept(string badId)
     {
         var h = new Harness();

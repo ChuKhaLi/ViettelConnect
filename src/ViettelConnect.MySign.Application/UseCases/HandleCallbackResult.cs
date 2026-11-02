@@ -131,7 +131,8 @@ internal sealed class HandleCallbackResult
         var encodedByPosition = new string?[pending.DocumentIds.Count];
         foreach (var (id, signature) in results)
         {
-            if (!int.TryParse(id, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var wireId)
+            if (id.Length > 1 && id[0] == '0'
+                || !int.TryParse(id, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var wireId)
                 || wireId < 1
                 || wireId > encodedByPosition.Length
                 || encodedByPosition[wireId - 1] is not null)
