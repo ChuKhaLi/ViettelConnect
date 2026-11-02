@@ -12,6 +12,7 @@
     <ProjectReference Include="..\..\src\ViettelConnect.MySign.Client\ViettelConnect.MySign.Client.csproj" />
     <ProjectReference Include="..\..\src\ViettelConnect.MySign.Domain\ViettelConnect.MySign.Domain.csproj" />
     <ProjectReference Include="..\..\src\ViettelConnect.MySign.Infrastructure\ViettelConnect.MySign.Infrastructure.csproj" />
+    <!-- Deliberate: SampleApiTests hosts the sample API via WebApplicationFactory&lt;Program&gt; (Program is exposed by `public partial class Program;` in the sample). -->
     <ProjectReference Include="..\..\samples\ViettelConnect.MySign.Sample.Api\ViettelConnect.MySign.Sample.Api.csproj" />
   </ItemGroup>
 

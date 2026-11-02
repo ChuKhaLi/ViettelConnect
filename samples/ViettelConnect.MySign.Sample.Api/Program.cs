@@ -92,4 +92,5 @@ static string? BearerOf(HttpRequest http)
 
 internal sealed record SignRequest(string DocumentName, string Sha256Base64);
 
+/// <summary>Điểm vào có thể tham chiếu được từ test (WebApplicationFactory<Program>).</summary>
 public partial class Program;

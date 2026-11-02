@@ -55,7 +55,6 @@ public class HttpPipelineThroughDiTests
     public async Task HttpClient_timeout_surfaces_as_a_transport_error_not_a_cancellation()
     {
         await using var fake = await FakeMySignServer.StartAsync();
-        fake.Scenario.DelayByRoute["certificates/info"] = TimeSpan.FromSeconds(30);
         await using var sp = Build(fake, o =>
         {
             o.Advanced.HttpTimeout = TimeSpan.FromMilliseconds(300);
@@ -64,10 +63,17 @@ public class HttpPipelineThroughDiTests
         await using var scope = sp.CreateAsyncScope();
         var client = scope.ServiceProvider.GetRequiredService<IViettelMySignClient>();
 
+        // Làm nóng: đăng nhập xong, token đã cache; lần gọi sau chắc chắn dừng ở certificates/info chứ không ở login.
+        await client.ListCertificatesAsync();
+        Assert.Equal(1, fake.LoginCount);
+        fake.Scenario.DelayByRoute["certificates/info"] = TimeSpan.FromSeconds(30);
+
         var watch = Stopwatch.StartNew();
         var ex = await Assert.ThrowsAsync<MySignException>(() => client.ListCertificatesAsync());
 
         Assert.Equal(MySignErrorCategory.Transport, ex.Category);
+        Assert.Equal(2, fake.RequestsFor("certificates/info").Count);
+        Assert.Equal(1, fake.LoginCount);
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(20), "The call must end at the HttpClient timeout, not wait for the server.");
     }
 
@@ -75,12 +81,19 @@ public class HttpPipelineThroughDiTests
     public async Task Caller_cancellation_surfaces_as_operation_canceled()
     {
         await using var fake = await FakeMySignServer.StartAsync();
-        fake.Scenario.DelayByRoute["certificates/info"] = TimeSpan.FromSeconds(30);
         await using var sp = Build(fake, o => o.TransportRetry.MaxAttempts = 1);
         await using var scope = sp.CreateAsyncScope();
         var client = scope.ServiceProvider.GetRequiredService<IViettelMySignClient>();
+
+        // Làm nóng: đăng nhập xong, token đã cache; lần gọi sau chắc chắn dừng ở certificates/info chứ không ở login.
+        await client.ListCertificatesAsync();
+        fake.Scenario.DelayByRoute["certificates/info"] = TimeSpan.FromSeconds(30);
+
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.ListCertificatesAsync(cts.Token));
+
+        Assert.Equal(1, fake.LoginCount);
+        Assert.Equal(2, fake.RequestsFor("certificates/info").Count);
     }
 }

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Logging;
@@ -26,7 +25,7 @@ namespace ViettelConnect.MySign.Infrastructure.Http;
 /// </para>
 /// <para>
 /// Token có thời hạn không dài hơn <see cref="TokenExpiryMargin"/> (biết nhờ <see cref="AccessToken.IssuedAtUtc"/>)
-/// dùng biên rút gọn bằng nửa thời hạn để vẫn được dùng lại; khi đó ghi cảnh báo một lần cho mỗi khoá cache (không ghi
+/// dùng biên rút gọn bằng nửa thời hạn để vẫn được dùng lại; khi đó ghi cảnh báo một lần cho mỗi khoá cache trong mỗi container DI (không ghi
 /// token hay định danh).
 /// </para>
 /// </summary>
@@ -34,9 +33,6 @@ internal sealed class MySignAuthHandler : DelegatingHandler
 {
     /// <summary>Token coi như hết hạn sớm chừng này, vì wire client trả đúng hạn của Viettel (không có biên).</summary>
     internal static readonly TimeSpan TokenExpiryMargin = TimeSpan.FromSeconds(60);
-
-    /// <summary>Các khoá cache đã được cảnh báo thời hạn token ngắn (một lần cho mỗi khoá trong tiến trình).</summary>
-    private static readonly ConcurrentDictionary<string, byte> ShortLifetimeWarned = new(StringComparer.Ordinal);
 
     private readonly Func<IMySignWireClient> _wireFactory;
     private readonly ITokenCache _cache;
@@ -176,7 +172,7 @@ internal sealed class MySignAuthHandler : DelegatingHandler
 
     private void WarnIfShortLifetime(string key, AccessToken token, string correlationId)
     {
-        if (Lifetime(token) is not { } lifetime || lifetime > TokenExpiryMargin || !ShortLifetimeWarned.TryAdd(key, 0))
+        if (Lifetime(token) is not { } lifetime || lifetime > TokenExpiryMargin || !_singleFlight.TryMarkShortLifetimeWarned(key))
         {
             return;
         }

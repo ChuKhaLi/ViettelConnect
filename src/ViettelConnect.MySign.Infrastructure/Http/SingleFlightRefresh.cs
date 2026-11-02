@@ -13,6 +13,14 @@ internal sealed class SingleFlightRefresh
 {
     private readonly ConcurrentDictionary<string, Lazy<Task<AccessToken>>> _slots = new();
 
+    private readonly ConcurrentDictionary<string, byte> _shortLifetimeWarned = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Đánh dấu khoá đã được cảnh báo thời hạn token ngắn; trả <c>true</c> đúng một lần cho mỗi khoá. Trạng thái nằm
+    /// trên singleton này nên vòng đời trùng với container DI, không phải cả tiến trình.
+    /// </summary>
+    public bool TryMarkShortLifetimeWarned(string cacheKey) => _shortLifetimeWarned.TryAdd(cacheKey, 0);
+
     public Task<AccessToken> RefreshAsync(string cacheKey, Func<CancellationToken, Task<AccessToken>> factory, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(cacheKey);

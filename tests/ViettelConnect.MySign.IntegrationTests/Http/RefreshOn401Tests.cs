@@ -251,8 +251,11 @@ public class RefreshOn401Tests
         var other = pipeline.SingleFlight.RefreshAsync(Creds.CacheKey, _ => gate.Task, CancellationToken.None);
 
         var call = pipeline.Wire.GetCertificatesAsync(Creds, CancellationToken.None);
+        // Chờ có giới hạn: nếu request thứ hai không bao giờ tới thì thất bại thay vì treo.
+        var waitWatch = System.Diagnostics.Stopwatch.StartNew();
         while (fake.RequestsFor("certificates/info").Count < 2)
         {
+            Assert.True(waitWatch.Elapsed < TimeSpan.FromSeconds(10), "Timed out waiting for the 401 request to arrive.");
             await Task.Delay(10);
         }
 
@@ -293,5 +296,24 @@ public class RefreshOn401Tests
         Assert.DoesNotContain(fake.TokenIssuedFor(creds.ClientId), warning.Text, StringComparison.Ordinal);
         Assert.DoesNotContain("fake-token", warning.Text, StringComparison.Ordinal);
         Assert.DoesNotContain(creds.UserId, warning.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Short_lifetime_warning_is_scoped_to_the_container_not_the_process()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ExpiresIn = "30";
+        var creds = Creds with { UserId = "user-warn-scope-" + Guid.NewGuid().ToString("N") };
+
+        // Hai "container" độc lập (mỗi pipeline có SingleFlightRefresh riêng) dùng cùng một khoá: mỗi bên cảnh báo đúng một lần.
+        foreach (var _ in new[] { 1, 2 })
+        {
+            var logger = new CapturingLogger();
+            var pipeline = TestPipeline.Create(fake.BaseUrl, authLogger: logger);
+            await pipeline.Wire.GetCertificatesAsync(creds, CancellationToken.None);
+            await pipeline.Wire.GetCertificatesAsync(creds, CancellationToken.None);
+
+            Assert.Single(logger.Lines.Where(l => l.Level == LogLevel.Warning));
+        }
     }
 }

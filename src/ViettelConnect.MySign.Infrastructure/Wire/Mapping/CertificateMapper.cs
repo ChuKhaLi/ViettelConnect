@@ -16,14 +16,14 @@ internal static class CertificateMapper
         var chain = (dto.Cert?.Certificates ?? []).Select(Base64.Decode).ToArray();
 
         return new Certificate(
-            CredentialId: dto.CredentialId,
-            SerialNumber: dto.Cert?.SerialNumber,
-            SubjectDn: dto.Cert?.SubjectDn,
-            IssuerDn: dto.Cert?.IssuerDn,
-            ValidFrom: GeneralizedTime.TryParse(dto.Cert?.ValidFrom),
-            ValidTo: GeneralizedTime.TryParse(dto.Cert?.ValidTo),
-            KeyEnabled: string.Equals(dto.Key?.Status, "ENABLED", StringComparison.OrdinalIgnoreCase),
-            SignAlgorithmOids: dto.Key?.Algo?.ToArray() ?? [],
-            Chain: chain);
+            credentialId: dto.CredentialId,
+            serialNumber: dto.Cert?.SerialNumber,
+            subjectDn: dto.Cert?.SubjectDn,
+            issuerDn: dto.Cert?.IssuerDn,
+            validFrom: GeneralizedTime.TryParse(dto.Cert?.ValidFrom),
+            validTo: GeneralizedTime.TryParse(dto.Cert?.ValidTo),
+            keyEnabled: string.Equals(dto.Key?.Status, "ENABLED", StringComparison.OrdinalIgnoreCase),
+            signAlgorithmOids: dto.Key?.Algo?.ToArray() ?? [],
+            chain: chain);
     }
 }

@@ -143,6 +143,24 @@ public class PublicSurfaceTests
     }
 
     [Fact]
+    public void Domain_and_application_public_members_do_not_mention_oids()
+    {
+        var offenders = new List<string>();
+        foreach (var type in DomainAssembly.GetExportedTypes().Concat(ApplicationAssembly.GetExportedTypes()))
+        {
+            foreach (var name in PublicNames(type))
+            {
+                if (name.Contains("Oid", StringComparison.Ordinal) || name.StartsWith("oid", StringComparison.Ordinal))
+                {
+                    offenders.Add($"{type.FullName}: {name}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0, "OID names in public Domain/Application API: " + string.Join(", ", offenders));
+    }
+
+    [Fact]
     public void Public_application_ports_only_expose_public_types()
     {
         // Mọi kiểu công khai của Application phải dùng được từ ngoài assembly: chữ ký không được trỏ vào kiểu nội bộ.

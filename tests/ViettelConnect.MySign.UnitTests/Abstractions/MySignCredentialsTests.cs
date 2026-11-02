@@ -46,6 +46,39 @@ public sealed class MySignCredentialsTests
     }
 
     [Fact]
+    public void CacheKey_is_computed_once_and_the_same_instance_is_returned()
+    {
+        var creds = new MySignCredentials("c", "s", "p", "u");
+        Assert.Same(creds.CacheKey, creds.CacheKey);
+    }
+
+    [Fact]
+    public void With_expression_after_cache_key_was_computed_yields_the_new_key()
+    {
+        var original = new MySignCredentials("c", "s", "p", "u");
+        var originalKey = original.CacheKey;
+
+        var changed = original with { UserId = "u2" };
+
+        Assert.NotEqual(originalKey, changed.CacheKey);
+        Assert.Equal(new MySignCredentials("c", "s", "p", "u2").CacheKey, changed.CacheKey);
+        Assert.Equal(originalKey, original.CacheKey);
+    }
+
+    [Fact]
+    public void Equality_is_by_the_four_credentials_regardless_of_cache_state()
+    {
+        var computed = new MySignCredentials("c", "s", "p", "u");
+        _ = computed.CacheKey;
+        var fresh = new MySignCredentials("c", "s", "p", "u");
+
+        Assert.Equal(fresh, computed);
+        Assert.Equal(fresh.GetHashCode(), computed.GetHashCode());
+        Assert.NotEqual(fresh, computed with { ClientSecret = "other" });
+        Assert.NotEqual(fresh, computed with { UserId = "x" });
+    }
+
+    [Fact]
     public void CacheKey_is_not_ambiguous_when_ids_contain_the_separator()
         => Assert.NotEqual(
             new MySignCredentials("a|b", "s", "c", "d").CacheKey,

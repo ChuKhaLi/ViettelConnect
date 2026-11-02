@@ -109,4 +109,34 @@ public class MySignLogScrubberTests
         Assert.DoesNotContain(signature, output);
         Assert.DoesNotContain(hex40, output);
     }
+
+    [Theory]
+    [InlineData("client_secret")]
+    [InlineData("access_token")]
+    [InlineData("refresh_token")]
+    [InlineData("token")]
+    [InlineData("SAD")]
+    public void Form_encoded_and_query_secrets_are_masked_even_when_hex_only(string name)
+    {
+        const string hex32 = "0123456789abcdef0123456789abcdef";
+        const string shortHex = "deadbeef";
+
+        var form = MySignLogScrubber.Scrub($"client_id=abc&{name}={hex32}&grant_type=x");
+        var query = MySignLogScrubber.Scrub($"GET /x?a=1&{name}={shortHex}&b=2");
+
+        Assert.DoesNotContain(hex32, form);
+        Assert.Contains("client_id=abc", form);
+        Assert.Contains("&grant_type=x", form);
+        Assert.DoesNotContain(shortHex, query);
+        Assert.Contains("a=1&", query);
+        Assert.Contains("&b=2", query);
+    }
+
+    [Fact]
+    public void Key_value_pattern_does_not_mask_unrelated_keys()
+    {
+        const string text = "correlationId=0123456789abcdef0123456789abcdef mytoken_count=5 transactionId=abc";
+
+        Assert.Equal(text, MySignLogScrubber.Scrub(text));
+    }
 }

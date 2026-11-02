@@ -28,7 +28,7 @@ Mã tương quan (correlation id) của người gọi đi kèm từng request (
 
 ## Cổng thay được
 
-Token cache, nguồn thông tin đăng nhập (`IMySignCredentialsAccessor`), chọn chứng thư, kho phiên ký chờ callback, đồng hồ/độ trễ. Mặc định đăng ký bằng `TryAdd`, ứng dụng ghi đè được.
+Token cache, nguồn thông tin đăng nhập (`IMySignCredentialsAccessor`), chọn chứng thư, kho phiên ký chờ callback, đồng hồ (`TimeProvider`). Mặc định đăng ký bằng `TryAdd`, ứng dụng ghi đè được.
 
 ## Ràng buộc cứng
 
