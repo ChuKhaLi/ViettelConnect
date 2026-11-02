@@ -135,7 +135,13 @@ public sealed class MySignOptionsValidatorTests
         o.Callback.TokenLifetime = TimeSpan.Zero;
         var r = Run(o);
         Assert.False(r.Succeeded);
-        Assert.True(r.Failures!.Count() >= 5);
+        var failures = r.Failures!.ToArray();
+        Assert.Contains(failures, f => f.Contains("Polling:Interval must be > 0"));
+        Assert.Contains(failures, f => f.Contains("Polling:TotalTimeout must be > Polling:Interval"));
+        Assert.Contains(failures, f => f.Contains("TransportRetry:MaxAttempts must be >= 1"));
+        Assert.Contains(failures, f => f.Contains("TransportRetry:MaxDelay must be >= BaseDelay"));
+        Assert.Contains(failures, f => f.Contains("Callback:TokenLifetime must be > 0"));
+        Assert.Equal(5, failures.Length);
     }
 
     [Theory]

@@ -256,7 +256,7 @@ public class FacadeFakeServerTests
             collection.AddSingleton<IMySignCredentialsAccessor, SwitchableCredentials>();
         }
 
-        await using var sp = collection.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var sp = collection.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
         await using var scope = sp.CreateAsyncScope();
         var client = scope.ServiceProvider.GetRequiredService<IViettelMySignClient>();
 

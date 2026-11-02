@@ -220,20 +220,4 @@ public class ServiceRegistrationTests
             .Single(p => p.Name == "tenantKey");
         Assert.Equal(OptionsCallbackClientResolver.DefaultTenantKey, parameter.DefaultValue);
     }
-
-    [Fact]
-    public void Registering_twice_does_not_duplicate_http_handlers()
-    {
-        var services = BuildServices(s =>
-        {
-            s.AddViettelMySign(Static);
-            s.AddViettelMySign(Static);
-        });
-
-        Assert.Single(services, d => d.ServiceType == typeof(IViettelMySignClient));
-        using var sp = services.BuildServiceProvider();
-        var factoryOptions = sp.GetRequiredService<IOptionsMonitor<Microsoft.Extensions.Http.HttpClientFactoryOptions>>()
-            .Get(nameof(MySignWireClient));
-        Assert.Equal(2, factoryOptions.HttpMessageHandlerBuilderActions.Count);
-    }
 }

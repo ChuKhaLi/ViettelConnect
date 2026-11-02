@@ -193,7 +193,7 @@ public class CallbackFakeServerTests
             "1",
             ("b", FakeMySignServer.SignatureFor("b")),
             ("a", FakeMySignServer.SignatureFor("a")));
-        Assert.Contains("\\r\\n", body,StringComparison.Ordinal); // JSON-escaped CRLF thật sự có trong thân
+        Assert.Contains("\\r\\n", body, StringComparison.Ordinal); // JSON-escaped CRLF thật sự có trong thân
         var (response, outcome) = await rig.Result.ExecuteAsync(token, body, CancellationToken.None);
 
         Assert.Equal("00", StatusCode(response));

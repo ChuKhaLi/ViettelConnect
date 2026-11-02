@@ -125,6 +125,7 @@ public class SignPollingFakeServerTests
         var ex = await Assert.ThrowsAsync<MySignException>(() => sign.ExecuteAsync(Request(Doc("a")), CancellationToken.None));
 
         Assert.Equal(MySignErrorCategory.SignRejected, ex.Category);
+        Assert.Equal("4002", ex.RawCode);
         Assert.Equal("corr-test", ex.CorrelationId);
     }
 

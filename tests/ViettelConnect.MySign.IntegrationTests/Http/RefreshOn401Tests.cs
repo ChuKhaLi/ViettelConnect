@@ -69,6 +69,26 @@ public class RefreshOn401Tests
     }
 
     [Fact]
+    public async Task SignHash_401_logs_in_again_once_and_the_retry_succeeds()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.RequireBearer = true;
+        var pipeline = TestPipeline.Create(fake.BaseUrl);
+        var request = new SignHashWireRequest("cred-001", [("doc-1", "RG9jMQ==", new byte[] { 1, 2, 3 })], "RGVzYw==", 0, null);
+
+        await pipeline.Wire.SignHashAsync(Creds, request, CancellationToken.None);
+        Assert.Equal(1, fake.LoginCount);
+
+        fake.RevokeIssuedTokens();
+        var response = await pipeline.Wire.SignHashAsync(Creds, request, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Equal(2, fake.LoginCount);
+        // 1 lần đầu + 1 lần bị 401 + 1 lần gửi lại sau khi đăng nhập lại.
+        Assert.Equal(3, fake.RequestsFor("signHash").Count);
+    }
+
+    [Fact]
     public async Task Retried_request_resends_the_same_body()
     {
         await using var fake = await FakeMySignServer.StartAsync();
@@ -146,6 +166,45 @@ public class RefreshOn401Tests
 
         Assert.Equal(MySignErrorCategory.Transport, ex.Category);
         Assert.Equal(3, terminal.Calls);
+    }
+
+    /// <summary>Chuyển tiếp tới fake thật, trừ signHash: ném lỗi mạng/timeout và đếm số lần gửi.</summary>
+    private sealed class SignHashFailingHandler(Func<Exception> failure) : DelegatingHandler(new HttpClientHandler())
+    {
+        private int _signHashCalls;
+
+        public int SignHashCalls => Volatile.Read(ref _signHashCalls);
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/signHash", StringComparison.Ordinal))
+            {
+                Interlocked.Increment(ref _signHashCalls);
+                throw failure();
+            }
+
+            return base.SendAsync(request, cancellationToken);
+        }
+    }
+
+    public static TheoryData<string> SignHashTransportFailures => new() { "http-request", "timeout" };
+
+    [Theory]
+    [MemberData(nameof(SignHashTransportFailures))]
+    public async Task SignHash_transport_failure_is_a_single_attempt_transport_error(string kind)
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        var handler = new SignHashFailingHandler(() => kind == "timeout"
+            ? new TaskCanceledException("timeout", new TimeoutException())
+            : new HttpRequestException("connection reset"));
+        var pipeline = TestPipeline.Create(fake.BaseUrl, handler, maxAttempts: 3);
+        var request = new SignHashWireRequest("cred-001", [("doc-1", "RG9jMQ==", new byte[] { 1, 2, 3 })], "RGVzYw==", 0, null);
+
+        var ex = await Assert.ThrowsAsync<MySignException>(
+            () => pipeline.Wire.SignHashAsync(Creds, request, CancellationToken.None));
+
+        Assert.Equal(MySignErrorCategory.Transport, ex.Category);
+        Assert.Equal(1, handler.SignHashCalls);
     }
 
     [Fact]
