@@ -47,6 +47,9 @@ internal sealed class FakeMySignScenario
     /// <summary>Bật thì signHash đồng bộ trả thiếu chữ ký cuối (số chữ ký != số mã băm).</summary>
     public bool DropLastSignature { get; set; }
 
+    /// <summary>signHash bất đồng bộ không trả transactionId (vi phạm giao thức).</summary>
+    public bool OmitTransactionId { get; set; }
+
     /// <summary>Chuỗi status lần lượt cho mỗi transactionId; phần tử cuối được lặp lại.</summary>
     public ConcurrentDictionary<string, List<string>> StatusSequence { get; } = new();
 
@@ -232,7 +235,13 @@ internal sealed class FakeMySignServer : IAsyncDisposable
                 return;
             }
 
-            var tx = "tx-" + Interlocked.Increment(ref self!._txSeq);
+            if (self!._scenario.OmitTransactionId)
+            {
+                await Write(ctx, 200, "{}");
+                return;
+            }
+
+            var tx = "tx-" + Interlocked.Increment(ref self._txSeq);
             self._hashesByTx[tx] = hashes;
             await Write(ctx, 200, JsonSerializer.Serialize(new { transactionId = tx }));
         });
@@ -246,7 +255,8 @@ internal sealed class FakeMySignServer : IAsyncDisposable
             var status = seq[Math.Min(call, seq.Count) - 1];
             if (status == "1" && self._hashesByTx.TryGetValue(tx, out var hashes))
             {
-                var sigs = hashes.Select(h => self.EncodeSignature(SignatureFor(h))).ToArray();
+                var kept = self._scenario.DropLastSignature ? hashes.Take(hashes.Count - 1) : hashes;
+                var sigs = kept.Select(h => self.EncodeSignature(SignatureFor(h))).ToArray();
                 await Write(ctx, 200, JsonSerializer.Serialize(new { signatures = sigs, status }));
                 return;
             }

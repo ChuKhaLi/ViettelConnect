@@ -27,6 +27,11 @@ public class SignSynchronousFakeServerTests
         public string Current => "corr-test";
     }
 
+    private sealed class NoDelay : IDelayer
+    {
+        public Task DelayAsync(TimeSpan delay, CancellationToken ct) => Task.CompletedTask;
+    }
+
     private static (SignHashes Sign, ListCertificates List) Build(FakeMySignServer fake)
     {
         // Chứng thư mặc định của fake đã hết hạn so với đồng hồ giả (2026-11-02).
@@ -44,6 +49,7 @@ public class SignSynchronousFakeServerTests
             new FirstUsableCertificateSelector(time, corr),
             new MobileConfirmationAuthorizationProvider(),
             corr,
+            new PollSignStatus(pipeline.Wire, new NoDelay(), time, corr),
             new MySignSigningSettings(SignMode.Synchronous));
         var list = new ListCertificates(pipeline.Wire, new FixedCredentials());
         return (sign, list);

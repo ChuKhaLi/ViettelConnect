@@ -4,6 +4,16 @@ namespace ViettelConnect.MySign.Application.Abstractions;
 
 /// <summary>
 /// Cài đặt ký mà use case cần, thuần tầng Application (Infrastructure ánh xạ từ <c>MySignOptions</c>).
-/// Task 8 sẽ bổ sung các trường hỏi trạng thái.
+/// <c>PollingAsyncCode</c> là mã <c>async</c> gửi lên khi ở chế độ hỏi trạng thái (mặc định 2, chưa kiểm chứng).
 /// </summary>
-internal sealed record MySignSigningSettings(SignMode SignMode);
+internal sealed record MySignSigningSettings(
+    SignMode SignMode,
+    int PollingAsyncCode,
+    TimeSpan PollingInterval,
+    TimeSpan PollingTotalTimeout)
+{
+    public MySignSigningSettings(SignMode signMode)
+        : this(signMode, 2, TimeSpan.FromSeconds(3), TimeSpan.FromMinutes(5))
+    {
+    }
+}
