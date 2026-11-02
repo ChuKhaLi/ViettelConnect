@@ -55,7 +55,7 @@ hợp vào ELIMS là **dự án thứ hai**, sẽ có thiết kế riêng sau kh
    bản gốc chỉ chứa `a-z A-Z 0-9 _ - (dấu cách)`. SDK tự bỏ dấu tiếng Việt (đ→d), thay ký tự cấm,
    cắt ngắn cho vừa giới hạn. Ứng dụng truyền tên tự nhiên.
 7. **Lỗi có phân loại**: ánh xạ bảng mã lỗi trong tài liệu (vd `58071` tham số sai, `59033` sai
-   user/client, `58093` thiếu SAD, `57091` chứng thư thiết bị hết hạn…) sang nhóm lỗi dễ xử lý
+   user/client, `58064`/`58065`/`58089` thiếu hoặc sai SAD, `57091` chứng thư thiết bị hết hạn…) sang nhóm lỗi dễ xử lý
    (xác thực, tham số, người dùng từ chối, hết giờ, lỗi tạm thời, khác), giữ mã gốc + mô tả gốc.
    Rút kinh nghiệm MisaConnect: **có cách đọc được body lỗi thô** khi bật cờ chẩn đoán (MisaConnect
    từng phải chặn HttpClient mới đọc được lý do 400).
