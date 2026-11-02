@@ -46,7 +46,6 @@ internal sealed class MySignWireClient : IMySignWireClient
         // Route tương đối chỉ phân giải đúng dưới /vtss/service/ khi base có dấu "/" cuối.
         var raw = http.BaseAddress?.ToString() ?? value.BaseUrl;
         _baseUri = new Uri(raw.EndsWith('/') ? raw : raw + "/", UriKind.Absolute);
-        http.BaseAddress ??= _baseUri;
     }
 
     /// <summary>Mã tương quan của lời gọi hiện tại (ưu tiên mã đang mượn khi handler xác thực tự đăng nhập).</summary>

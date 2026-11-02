@@ -49,11 +49,6 @@ public class SignPollingFakeServerTests
 
     private static (SignHashes Sign, AdvancingDelayer Delayer) Build(FakeMySignServer fake, int pollingAsyncCode = 2)
     {
-        foreach (var cert in fake.Scenario.Certificates)
-        {
-            cert.ValidTo = "20301231000000Z";
-        }
-
         var pipeline = TestPipeline.Create(fake.BaseUrl);
         var corr = new FixedCorrelation();
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero));
@@ -338,11 +333,6 @@ public class SignPollingFakeServerTests
     /// <summary>Dựng với đồng hồ và delayer thật (cho các test giới hạn thời gian tổng thật sự).</summary>
     private static SignHashes BuildRealTime(FakeMySignServer fake, TimeSpan interval, TimeSpan total)
     {
-        foreach (var cert in fake.Scenario.Certificates)
-        {
-            cert.ValidTo = "20301231000000Z";
-        }
-
         var pipeline = TestPipeline.Create(fake.BaseUrl);
         var corr = new FixedCorrelation();
         return new SignHashes(

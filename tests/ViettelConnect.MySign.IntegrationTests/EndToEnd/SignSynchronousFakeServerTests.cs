@@ -34,12 +34,6 @@ public class SignSynchronousFakeServerTests
 
     private static (SignHashes Sign, ListCertificates List) Build(FakeMySignServer fake)
     {
-        // Chứng thư mặc định của fake đã hết hạn so với đồng hồ giả (2026-11-02).
-        foreach (var cert in fake.Scenario.Certificates)
-        {
-            cert.ValidTo = "20301231000000Z";
-        }
-
         var pipeline = TestPipeline.Create(fake.BaseUrl);
         var corr = new FixedCorrelation();
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero));
@@ -93,6 +87,21 @@ public class SignSynchronousFakeServerTests
 
         Assert.Equal(MySignErrorCategory.Validation, ex.Category);
         Assert.Equal("corr-test", ex.CorrelationId);
+        Assert.Empty(fake.Requests);
+    }
+
+    [Fact]
+    public async Task Null_display_name_fails_validation_before_any_network_call()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        var (sign, _) = Build(fake);
+        var bad = new HashDocument("doc-1", null!, new byte[32]);
+
+        var ex = await Assert.ThrowsAsync<MySignException>(
+            () => sign.ExecuteAsync(new SignHashesRequest([bad], null, null), CancellationToken.None));
+
+        Assert.Equal(MySignErrorCategory.Validation, ex.Category);
+        Assert.Contains("DisplayName", ex.Detail);
         Assert.Empty(fake.Requests);
     }
 

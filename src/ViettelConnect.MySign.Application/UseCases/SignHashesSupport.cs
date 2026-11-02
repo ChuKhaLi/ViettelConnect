@@ -26,6 +26,11 @@ internal static class SignHashesSupport
                 throw Fail(correlation, MySignErrorCategory.Validation, $"Tài liệu thứ {i + 1} thiếu DocumentId.");
             }
 
+            if (doc.DisplayName is null)
+            {
+                throw Fail(correlation, MySignErrorCategory.Validation, $"Tài liệu thứ {i + 1} thiếu DisplayName.");
+            }
+
             if (doc.Sha256 is null || doc.Sha256.Length != Sha256Length)
             {
                 throw Fail(correlation, MySignErrorCategory.Validation, $"Mã băm của tài liệu thứ {i + 1} phải đúng {Sha256Length} byte (SHA-256).");
@@ -62,7 +67,7 @@ internal static class SignHashesSupport
             request.Documents
                 .Select(d => (d.DocumentId, DisplayLabelEncoder.Encode(d.DisplayName, d.DocumentId), d.Sha256))
                 .ToArray(),
-            string.IsNullOrWhiteSpace(request.Description) ? null : DisplayLabelEncoder.Encode(request.Description, "Document"),
+            string.IsNullOrWhiteSpace(request.Description) ? null : DisplayLabelEncoder.Encode(request.Description, fallback: null),
             asyncCode,
             sad);
 

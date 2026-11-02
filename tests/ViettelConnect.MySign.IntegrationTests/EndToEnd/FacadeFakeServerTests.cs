@@ -36,11 +36,6 @@ public class FacadeFakeServerTests
     private static async Task<FakeMySignServer> StartFake()
     {
         var fake = await FakeMySignServer.StartAsync();
-        foreach (var cert in fake.Scenario.Certificates)
-        {
-            cert.ValidTo = "20301231000000Z";
-        }
-
         return fake;
     }
 

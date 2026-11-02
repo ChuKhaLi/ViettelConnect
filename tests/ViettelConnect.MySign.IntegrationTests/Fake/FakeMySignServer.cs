@@ -27,7 +27,7 @@ internal sealed class FakeCertificate
     public string SubjectDn { get; set; } = "CN=Nguyen Van A,O=Cong ty ABC";
     public string IssuerDn { get; set; } = "CN=Viettel-CA";
     public string ValidFrom { get; set; } = "20240709132216+0000";
-    public string ValidTo { get; set; } = "20260709132216Z";
+    public string ValidTo { get; set; } = "20301231000000Z"; // luôn sau đồng hồ giả của các test (2026-11-02)
 }
 
 /// <summary>Kịch bản cấu hình được cho fake MySign.</summary>

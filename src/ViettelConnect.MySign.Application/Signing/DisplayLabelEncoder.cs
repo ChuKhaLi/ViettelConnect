@@ -13,7 +13,7 @@ internal static class DisplayLabelEncoder
     private const int MaxSourceLength = 72;
     private const string LastResort = "Document";
 
-    public static string Encode(string? label, string fallback)
+    public static string Encode(string? label, string? fallback)
     {
         var normalized = Normalize(label);
         if (normalized.Length == 0)

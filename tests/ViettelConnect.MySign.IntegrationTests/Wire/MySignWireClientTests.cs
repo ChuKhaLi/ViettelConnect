@@ -82,6 +82,32 @@ public class MySignWireClientTests
     }
 
     [Fact]
+    public async Task Login_accepts_numeric_expires_in()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ErrorByRoute["ras/v1/login"] = (200, "{\"access_token\":\"num-token\",\"token_type\":\"Bearer\",\"expires_in\":1800}");
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero));
+
+        var token = await NewClient(fake.BaseUrl, time).LoginAsync(Creds, CancellationToken.None);
+
+        Assert.Equal("num-token", token.Value);
+        Assert.Equal(time.GetUtcNow().AddSeconds(1800), token.ExpiresAtUtc);
+    }
+
+    [Fact]
+    public async Task Error_body_with_only_error_code_is_still_mapped()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ErrorByRoute["ras/v1/login"] = (401, "{\"error_code\":\"59033\"}");
+
+        var ex = await Assert.ThrowsAsync<MySignException>(
+            () => NewClient(fake.BaseUrl).LoginAsync(Creds, CancellationToken.None));
+
+        Assert.Equal(MySignErrorCategory.Authentication, ex.Category);
+        Assert.Equal("59033", ex.RawCode);
+    }
+
+    [Fact]
     public async Task Login_missing_access_token_is_protocol_violation()
     {
         await using var fake = await FakeMySignServer.StartAsync();
@@ -140,7 +166,7 @@ public class MySignWireClientTests
         Assert.Equal("CN=Nguyen Van A,O=Cong ty ABC", cert.SubjectDn);
         Assert.Equal("CN=Viettel-CA", cert.IssuerDn);
         Assert.Equal(new DateTimeOffset(2024, 7, 9, 13, 22, 16, TimeSpan.Zero), cert.ValidFrom);
-        Assert.Equal(new DateTimeOffset(2026, 7, 9, 13, 22, 16, TimeSpan.Zero), cert.ValidTo);
+        Assert.Equal(new DateTimeOffset(2030, 12, 31, 0, 0, 0, TimeSpan.Zero), cert.ValidTo);
         Assert.True(cert.KeyEnabled);
         Assert.Equal(["1.2.840.113549.1.1.1"], cert.SignAlgorithmOids);
         Assert.Equal(3, cert.Chain.Count);

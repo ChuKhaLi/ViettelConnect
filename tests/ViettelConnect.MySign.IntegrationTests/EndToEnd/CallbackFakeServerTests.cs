@@ -33,11 +33,6 @@ public class CallbackFakeServerTests
     {
         public Rig(FakeMySignServer fake)
         {
-            foreach (var cert in fake.Scenario.Certificates)
-            {
-                cert.ValidTo = "20301231000000Z";
-            }
-
             var pipeline = TestPipeline.Create(fake.BaseUrl);
             Time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero));
             Pending = new InMemoryPendingSignatureStore();
@@ -106,11 +101,6 @@ public class CallbackFakeServerTests
     public async Task Begin_store_failure_after_submission_carries_transaction_id()
     {
         await using var fake = await FakeMySignServer.StartAsync();
-        foreach (var cert in fake.Scenario.Certificates)
-        {
-            cert.ValidTo = "20301231000000Z";
-        }
-
         var pipeline = TestPipeline.Create(fake.BaseUrl);
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero));
         var corr = new FixedCorrelation();
