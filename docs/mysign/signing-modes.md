@@ -12,7 +12,7 @@ Cả ba kiểu đều chỉ ký mã băm và đều cần người ký xác nh�
 | Kiểu | Cấu hình / gọi | Hành vi |
 | --- | --- | --- |
 | Đồng bộ | `SignMode = Synchronous`, `SignHashesAsync` | Một lời gọi `signHash` chờ tới khi người ký xác nhận. Thời gian chờ HTTP lấy từ `Advanced:HttpTimeout` (mặc định `Polling:TotalTimeout` + 1 phút). Không thử lại khi lỗi mạng/5xx vì sẽ gửi yêu cầu thứ hai tới điện thoại người ký. Người ký không xác nhận kịp (mã Viettel 58061) cũng ném `MySignTimeoutException` như chế độ hỏi trạng thái. |
-| Hỏi trạng thái | `SignMode = Polling` (mặc định), `SignHashesAsync` | Gửi yêu cầu rồi hỏi `requests/status` mỗi `Polling:Interval` tới hết `Polling:TotalTimeout`. Trạng thái lạ hoặc rỗng, và lỗi kết nối tạm thời khi hỏi trạng thái, được coi là đang chờ; hết giờ thì ném `MySignTimeoutException` (kèm `TransactionId`), không treo vô hạn. |
+| Hỏi trạng thái | `SignMode = Polling` (mặc định), `SignHashesAsync` | Gửi yêu cầu rồi hỏi `requests/status` mỗi `Polling:Interval` tới hết `Polling:TotalTimeout`. Trạng thái lạ hoặc rỗng, và lỗi kết nối tạm thời khi hỏi trạng thái, được coi là đang chờ; hết giờ thì ném `MySignTimeoutException` (kèm `TransactionId` và trạng thái thô cuối cùng), không treo vô hạn. Mỗi lần hỏi bị huỷ khi tới hạn chót, nên một lời gọi `requests/status` bị treo không kéo tổng thời gian quá `Polling:TotalTimeout` (cộng tối đa 1 giây dành cho lần hỏi cuối). |
 | Callback | `BeginSignHashesAsync` + hai endpoint callback | Trả ngay `TransactionId`; Viettel báo kết quả qua endpoint của ứng dụng. Xem [Callback](./callback). |
 
 ## Thứ tự và tính toàn vẹn

@@ -62,6 +62,9 @@ internal sealed class FakeMySignScenario
     /// <summary>Bật thì mọi route trừ login yêu cầu Bearer do login cấp; thiếu/sai thì 401 59033.</summary>
     public bool RequireBearer { get; set; }
 
+    /// <summary>Route tương đối -> độ trễ trước khi trả lời (mô phỏng máy chủ treo); huỷ theo request bị huỷ.</summary>
+    public ConcurrentDictionary<string, TimeSpan> DelayByRoute { get; } = new();
+
     /// <summary>Login của client_id này chỉ trả lời sau khi task tương ứng hoàn tất (kiểm chứng tách biệt giữa đơn vị).</summary>
     public ConcurrentDictionary<string, Task> LoginGateByClient { get; } = new();
 }
@@ -148,6 +151,18 @@ internal sealed class FakeMySignServer : IAsyncDisposable
                 if (route == "ras/v1/login")
                 {
                     Interlocked.Increment(ref self._loginCount);
+                }
+
+                if (self._scenario.DelayByRoute.TryGetValue(route, out var delay))
+                {
+                    try
+                    {
+                        await Task.Delay(delay, ctx.RequestAborted);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
                 }
 
                 if (self._scenario.ErrorByRoute.TryGetValue(route, out var err))

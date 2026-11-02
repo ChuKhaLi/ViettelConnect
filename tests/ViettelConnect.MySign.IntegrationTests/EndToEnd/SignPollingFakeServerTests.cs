@@ -304,4 +304,137 @@ public class SignPollingFakeServerTests
             Assert.Equal(FirstTx, protocol.TransactionId);
         }
     }
+
+    [Fact]
+    public async Task Non_base64_signature_in_status_is_a_protocol_violation_carrying_transaction_id()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ErrorByRoute["requests/status"] = (200, "{\"status\":\"1\",\"signatures\":[\"!!not-base64!!\"]}");
+        var (sign, _) = Build(fake);
+
+        var ex = await Assert.ThrowsAsync<MySignException>(() => sign.ExecuteAsync(Request(Doc("a")), CancellationToken.None));
+
+        Assert.Equal(MySignErrorCategory.ProtocolViolation, ex.Category);
+        Assert.Equal(FirstTx, ex.TransactionId);
+        Assert.Equal("corr-test", ex.CorrelationId);
+    }
+
+    [Fact]
+    public async Task Status_endpoint_58061_error_is_a_timeout_exception_carrying_transaction_id()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ErrorByRoute["requests/status"] =
+            (400, "{\"error\":\"58061\",\"error_description\":\"Request timeout for mobile authorisation\"}");
+        var (sign, _) = Build(fake);
+
+        var ex = await Assert.ThrowsAsync<MySignTimeoutException>(() => sign.ExecuteAsync(Request(Doc("a")), CancellationToken.None));
+
+        Assert.Equal(MySignErrorCategory.SignTimeout, ex.Category);
+        Assert.Equal("58061", ex.RawCode);
+        Assert.Equal(FirstTx, ex.TransactionId);
+        Assert.Equal("corr-test", ex.CorrelationId);
+    }
+
+    /// <summary>Dựng với đồng hồ và delayer thật (cho các test giới hạn thời gian tổng thật sự).</summary>
+    private static SignHashes BuildRealTime(FakeMySignServer fake, TimeSpan interval, TimeSpan total)
+    {
+        foreach (var cert in fake.Scenario.Certificates)
+        {
+            cert.ValidTo = "20301231000000Z";
+        }
+
+        var pipeline = TestPipeline.Create(fake.BaseUrl);
+        var corr = new FixedCorrelation();
+        return new SignHashes(
+            pipeline.Wire,
+            new FixedCredentials(),
+            new FirstUsableCertificateSelector(TimeProvider.System, corr),
+            new MobileConfirmationAuthorizationProvider(),
+            corr,
+            new PollSignStatus(pipeline.Wire, new ViettelConnect.MySign.Infrastructure.Time.TaskDelayer(), TimeProvider.System, corr),
+            new MySignSigningSettings(SignMode.Polling, 2, interval, total));
+    }
+
+    [Fact]
+    public async Task Hanging_status_call_is_bounded_by_total_timeout()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.StatusSequence[FirstTx] = ["4000"];
+        fake.Scenario.DelayByRoute["requests/status"] = TimeSpan.FromSeconds(30);
+        var total = TimeSpan.FromSeconds(1.5);
+        var sign = BuildRealTime(fake, TimeSpan.FromMilliseconds(100), total);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var ex = await Assert.ThrowsAsync<MySignTimeoutException>(() => sign.ExecuteAsync(Request(Doc("a")), CancellationToken.None));
+        sw.Stop();
+
+        Assert.Equal(FirstTx, ex.TransactionId);
+        Assert.Equal("corr-test", ex.CorrelationId);
+        Assert.InRange(sw.Elapsed, total - TimeSpan.FromMilliseconds(200), total + TimeSpan.FromSeconds(3));
+    }
+
+    /// <summary>Wire giả cho PollSignStatus: lần hỏi đầu trả "4000", các lần sau treo tới khi bị huỷ.</summary>
+    private sealed class PendingThenHangingWire : IMySignWireClient
+    {
+        private int _calls;
+
+        public TaskCompletionSource SecondCallStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<AccessToken> LoginAsync(MySignCredentials c, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<ViettelConnect.MySign.Domain.Certificates.Certificate>> GetCertificatesAsync(
+            MySignCredentials c, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<SignHashWireResponse> SignHashAsync(MySignCredentials c, SignHashWireRequest r, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public async Task<StatusSnapshot> GetStatusAsync(MySignCredentials c, string transactionId, CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _calls) == 1)
+            {
+                return new StatusSnapshot("4000", SignStatus.Pending, [], null, null);
+            }
+
+            SecondCallStarted.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct);
+            throw new InvalidOperationException("unreachable");
+        }
+    }
+
+    [Fact]
+    public async Task Hanging_status_call_ends_at_deadline_with_last_raw_status()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero));
+        var wire = new PendingThenHangingWire();
+        var poll = new PollSignStatus(wire, new AdvancingDelayer(time), time, new FixedCorrelation());
+
+        var task = poll.ExecuteAsync(Creds, FirstTx, Interval, Total, CancellationToken.None);
+        await wire.SecondCallStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(task.IsCompleted);
+
+        // Lần hỏi thứ hai bắt đầu ở t=5s; ngân sách còn 55s. Trước hạn chót: vẫn treo; tới hạn chót: hết giờ.
+        time.Advance(TimeSpan.FromSeconds(54));
+        Assert.False(task.IsCompleted);
+        time.Advance(TimeSpan.FromSeconds(1));
+
+        var ex = await Assert.ThrowsAsync<MySignTimeoutException>(() => task.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("4000", ex.RawCode);
+        Assert.Equal(FirstTx, ex.TransactionId);
+        Assert.Equal("corr-test", ex.CorrelationId);
+        Assert.Equal(time.GetUtcNow(), new DateTimeOffset(2026, 11, 2, 8, 1, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task Caller_cancellation_during_hanging_status_call_is_operation_canceled()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.DelayByRoute["requests/status"] = TimeSpan.FromSeconds(30);
+        var sign = BuildRealTime(fake, TimeSpan.FromMilliseconds(100), TimeSpan.FromSeconds(20));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sign.ExecuteAsync(Request(Doc("a")), cts.Token));
+
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5));
+    }
 }
