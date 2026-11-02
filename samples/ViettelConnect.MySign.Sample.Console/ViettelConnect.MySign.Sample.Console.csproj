@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ViettelConnect.MySign.Sample.Console</RootNamespace>
+    <AssemblyName>ViettelConnect.MySign.Sample.Console</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <UserSecretsId>viettelconnect-mysign-sample-console-6d2b7f41-3c8e-4a19-9b57-1e4f0a8c2d73</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ViettelConnect.MySign.Application\ViettelConnect.MySign.Application.csproj" />
+    <ProjectReference Include="..\..\src\ViettelConnect.MySign.Client\ViettelConnect.MySign.Client.csproj" />
+    <ProjectReference Include="..\..\src\ViettelConnect.MySign.Domain\ViettelConnect.MySign.Domain.csproj" />
+    <ProjectReference Include="..\..\src\ViettelConnect.MySign.Infrastructure\ViettelConnect.MySign.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+  </ItemGroup>
+
+</Project>

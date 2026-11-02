@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: "Optional --filter expression (leave blank to run all unit tests)"
+        required: false
+        default: ""
+      configuration:
+        description: "Build configuration"
+        required: false
+        default: "Release"
+        type: choice
+        options:
+          - Release
+          - Debug
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore ViettelConnect.slnx
+
+      - name: Build
+        run: dotnet build ViettelConnect.slnx --no-restore --configuration ${{ inputs.configuration || 'Release' }}
+
+      - name: Unit tests
+        run: dotnet test tests/ViettelConnect.MySign.UnitTests/ViettelConnect.MySign.UnitTests.csproj --no-build --configuration ${{ inputs.configuration || 'Release' }} ${{ inputs.test_filter && format('--filter "{0}"', inputs.test_filter) || '' }} --logger "trx;LogFileName=unit-tests.trx" --results-directory artifacts/test-results
+
+      - name: Integration tests (in-repo MySign fake)
+        run: dotnet test tests/ViettelConnect.MySign.IntegrationTests/ViettelConnect.MySign.IntegrationTests.csproj --no-build --configuration ${{ inputs.configuration || 'Release' }} ${{ inputs.test_filter && format('--filter "{0}"', inputs.test_filter) || '' }} --logger "trx;LogFileName=integration-tests.trx" --results-directory artifacts/test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-results
+          path: artifacts/test-results

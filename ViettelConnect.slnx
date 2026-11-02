@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ViettelConnect.MySign.Application/ViettelConnect.MySign.Application.csproj" />
+    <Project Path="src/ViettelConnect.MySign.Client/ViettelConnect.MySign.Client.csproj" />
+    <Project Path="src/ViettelConnect.MySign.Domain/ViettelConnect.MySign.Domain.csproj" />
+    <Project Path="src/ViettelConnect.MySign.Infrastructure/ViettelConnect.MySign.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/ViettelConnect.MySign.Sample.Api/ViettelConnect.MySign.Sample.Api.csproj" />
+    <Project Path="samples/ViettelConnect.MySign.Sample.Console/ViettelConnect.MySign.Sample.Console.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ViettelConnect.MySign.IntegrationTests/ViettelConnect.MySign.IntegrationTests.csproj" />
+    <Project Path="tests/ViettelConnect.MySign.UnitTests/ViettelConnect.MySign.UnitTests.csproj" />
+  </Folder>
+</Solution>

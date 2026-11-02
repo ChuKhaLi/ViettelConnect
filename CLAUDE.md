@@ -51,11 +51,52 @@ currently only) package is **`ViettelConnect.MySign`** — remote signing via Vi
 - Unit tests: no network, fast. Integration tests: in-repo MySign fake; real-account tests must
   skip cleanly when credentials env vars are absent.
 
-## Build & test (once scaffolded)
+- Milestone-1 work follows the 12-task plan in `docs/superpowers/plans/`, executed with
+  `superpowers:subagent-driven-development` (or `superpowers:executing-plans`). The plan's
+  **Review Focus** list (long Vietnamese names, unknown poll statuses, two labs in parallel,
+  signature-count mismatch, bad callback tokens) is the set of edge cases every reviewer checks.
+- Project skills: `viettel-api-lookup` (find a field/code in the local Viettel doc),
+  `port-from-misaconnect` (copy a MisaConnect file and strip MISA-only parts).
+  Project agent: `mysign-rules-reviewer` (checks a diff against the hard rules above).
+
+## Build & test
+
+Repo is docs-only until plan Task 1 scaffolds the solution (.NET SDK 10 via `global.json`,
+target `net8.0`, Central Package Management, xUnit).
 
 ```
 dotnet build ViettelConnect.slnx
 dotnet test tests/ViettelConnect.MySign.UnitTests
 dotnet test tests/ViettelConnect.MySign.IntegrationTests
-dotnet format ViettelConnect.slnx
+dotnet test tests/ViettelConnect.MySign.UnitTests --filter "FullyQualifiedName~DisplayLabelEncoderTests"   # one class
+dotnet format ViettelConnect.slnx --verify-no-changes                                                     # CI gate
 ```
+
+- Unit/integration split is by project, not by xUnit trait.
+- Real-account tests use `[RealAccountFact]` and skip unless `VIETTEL_MYSIGN_CLIENT_ID`,
+  `VIETTEL_MYSIGN_CLIENT_SECRET`, `VIETTEL_MYSIGN_PROFILE_ID`, `VIETTEL_MYSIGN_USER_ID` are set.
+  Run them with `--filter "FullyQualifiedName~RealAccount"`.
+- Fake server: `tests/ViettelConnect.MySign.IntegrationTests/Fake/FakeMySignServer.cs` (scripted
+  certificates, per-transaction status sequences, per-endpoint errors, login counter).
+
+## Architecture (MisaConnect.ESign layering)
+
+`Domain` → `Application` → `Infrastructure` → `Client`, one NuGet package (`ViettelConnect.MySign`,
+the Client project) that bundles the other three. `LayeringTests` enforce it:
+
+- `Domain`: no dependencies. Certificates, `SignStatus`, `MySignException` + error catalog.
+- `Application`: use cases + ports only (depends on Domain + `Logging.Abstractions`). Ports:
+  `IMySignCredentialsAccessor`, `ITokenCache`, `ICertificateSelector`, `IDelayer`,
+  `ISignAuthorizationProvider` (placeholder for future auto-sign/SAD — returns null = app approval),
+  `IMySignWireClient`. New swappable collaborators go here, with an Infrastructure default.
+- `Infrastructure`: `internal` except DI extensions and `MySignOptions` (+ child options,
+  `CredentialsMode`). Wire DTOs, HttpClient handlers (transient retry, Bearer + single-flight
+  refresh on 401), log scrubber, defaults registered with `TryAdd` so apps can override.
+- `Client`: `IViettelMySignClient` facade + public DTOs; `services.AddViettelMySign(...)` binds
+  section `Viettel:MySign`.
+
+Signing flow: login (per `ClientId|ProfileId|UserId` token-cache key) → `certificates/info` →
+pick certificate → `signHash` with `async` 0 (sync), 2 (poll `requests/status` until signed /
+rejected / `TotalTimeout`; unknown statuses = still pending), or 3 (Viettel calls the partner's
+callback endpoints; callback clients are per tenant via `tenantKey`). The callback core takes and
+returns JSON strings — no ASP.NET Core dependency; hosting is the sample's job.

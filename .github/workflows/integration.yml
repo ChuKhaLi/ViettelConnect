@@ -1,0 +1,57 @@
+name: integration
+
+# Chỉ chạy tay. Chạy test tích hợp với tài khoản Viettel MySign THẬT (RealAccount); người ký phải bấm xác nhận
+# trên ứng dụng MySign trong thời gian chờ. Thiếu secrets thì các test RealAccount tự Skipped.
+on:
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: "Optional --filter expression (leave blank to run all integration tests)"
+        required: false
+        default: ""
+      configuration:
+        description: "Build configuration"
+        required: false
+        default: "Release"
+        type: choice
+        options:
+          - Release
+          - Debug
+
+jobs:
+  real-account-tests:
+    runs-on: ubuntu-latest
+    environment: viettel-mysign
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore ViettelConnect.slnx
+
+      - name: Build
+        run: dotnet build ViettelConnect.slnx --no-restore --configuration ${{ inputs.configuration || 'Release' }}
+
+      - name: Integration tests (fake server + RealAccount)
+        env:
+          VIETTEL_MYSIGN_BASE_URL: ${{ secrets.VIETTEL_MYSIGN_BASE_URL }}
+          VIETTEL_MYSIGN_CLIENT_ID: ${{ secrets.VIETTEL_MYSIGN_CLIENT_ID }}
+          VIETTEL_MYSIGN_CLIENT_SECRET: ${{ secrets.VIETTEL_MYSIGN_CLIENT_SECRET }}
+          VIETTEL_MYSIGN_PROFILE_ID: ${{ secrets.VIETTEL_MYSIGN_PROFILE_ID }}
+          VIETTEL_MYSIGN_USER_ID: ${{ secrets.VIETTEL_MYSIGN_USER_ID }}
+          TEST_FILTER: ${{ inputs.test_filter }}
+        run: |
+          ARGS=()
+          if [ -n "$TEST_FILTER" ]; then ARGS+=(--filter "$TEST_FILTER"); fi
+          dotnet test tests/ViettelConnect.MySign.IntegrationTests/ViettelConnect.MySign.IntegrationTests.csproj --no-build --configuration ${{ inputs.configuration || 'Release' }} "${ARGS[@]}" --logger "trx;LogFileName=integration-tests.trx" --results-directory artifacts/test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: integration-test-results
+          path: artifacts/test-results
