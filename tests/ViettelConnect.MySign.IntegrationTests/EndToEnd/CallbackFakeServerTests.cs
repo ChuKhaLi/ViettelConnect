@@ -125,6 +125,27 @@ public class CallbackFakeServerTests
     private static HashDocument Doc(string id) =>
         new(id, "Biên bản", SHA256.HashData(Encoding.UTF8.GetBytes(id)));
 
+    /// <summary>
+    /// Ngắt dòng base64 bằng CRLF (xuống dòng kiểu MIME) tường minh (độ rộng nhỏ để chữ ký ngắn của fake cũng bị ngắt), nên nhánh CRLF luôn
+    /// được chạy bất kể hệ điều hành; <see cref="ResultBody"/> được test khẳng định có CRLF.
+    /// </summary>
+    private static string WithCrlf(string base64)
+    {
+        const int width = 4;
+        var sb = new System.Text.StringBuilder();
+        for (var i = 0; i < base64.Length; i += width)
+        {
+            if (i > 0)
+            {
+                sb.Append("\r\n");
+            }
+
+            sb.Append(base64, i, Math.Min(width, base64.Length - i));
+        }
+
+        return sb.ToString();
+    }
+
     private static string ResultBody(string tx, string status, params (string Id, byte[] Signature)[] results) =>
         JsonSerializer.Serialize(new
         {
@@ -134,7 +155,7 @@ public class CallbackFakeServerTests
                 action_timestamp = 1735543766,
                 signature_timestamp = 1735543766,
                 results = results
-                    .Select(r => new { document_id = r.Id, signature = Convert.ToBase64String(r.Signature, Base64FormattingOptions.InsertLineBreaks).Replace("\n", "\r\n", StringComparison.Ordinal).Replace("\r\r", "\r", StringComparison.Ordinal) })
+                    .Select(r => new { document_id = r.Id, signature = WithCrlf(Convert.ToBase64String(r.Signature)) })
                     .ToArray(),
             },
         });
@@ -172,6 +193,7 @@ public class CallbackFakeServerTests
             "1",
             ("b", FakeMySignServer.SignatureFor("b")),
             ("a", FakeMySignServer.SignatureFor("a")));
+        Assert.Contains("\\r\\n", body,StringComparison.Ordinal); // JSON-escaped CRLF thật sự có trong thân
         var (response, outcome) = await rig.Result.ExecuteAsync(token, body, CancellationToken.None);
 
         Assert.Equal("00", StatusCode(response));
