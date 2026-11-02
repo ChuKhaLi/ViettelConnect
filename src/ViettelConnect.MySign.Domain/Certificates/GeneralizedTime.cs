@@ -27,12 +27,17 @@ public static class GeneralizedTime
             if (zone.Length != 5 || (zone[0] != '+' && zone[0] != '-')
                 || !int.TryParse(zone.AsSpan(1, 2), NumberStyles.None, CultureInfo.InvariantCulture, out var hh)
                 || !int.TryParse(zone.AsSpan(3, 2), NumberStyles.None, CultureInfo.InvariantCulture, out var mm)
-                || hh > 14 || mm > 59)
+                || mm > 59)
             {
                 return null;
             }
 
             offset = new TimeSpan(hh, mm, 0);
+            if (offset > TimeSpan.FromHours(14))
+            {
+                return null;
+            }
+
             if (zone[0] == '-')
             {
                 offset = -offset;
@@ -49,6 +54,13 @@ public static class GeneralizedTime
             return null;
         }
 
-        return new DateTimeOffset(local, offset);
+        try
+        {
+            return new DateTimeOffset(local, offset);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 }
