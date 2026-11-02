@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>ViettelConnect.MySign.Sample.Api</RootNamespace>
+    <AssemblyName>ViettelConnect.MySign.Sample.Api</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <UserSecretsId>viettelconnect-mysign-sample-api-0b9c5e28-7a14-4d63-8f2e-5c1d9a3b6e40</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ViettelConnect.MySign.Application\ViettelConnect.MySign.Application.csproj" />
+    <ProjectReference Include="..\..\src\ViettelConnect.MySign.Client\ViettelConnect.MySign.Client.csproj" />
+    <ProjectReference Include="..\..\src\ViettelConnect.MySign.Domain\ViettelConnect.MySign.Domain.csproj" />
+    <ProjectReference Include="..\..\src\ViettelConnect.MySign.Infrastructure\ViettelConnect.MySign.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

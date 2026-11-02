@@ -1,0 +1,44 @@
+title: ViettelConnect
+description: Community .NET SDK cho chữ ký số từ xa Viettel MySign (chưa phát hành)
+url: https://chung-nd.id.vn
+baseurl: /ViettelConnect
+
+remote_theme: just-the-docs/just-the-docs@v0.10.1
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+
+logo: /assets/images/icon.png
+favicon_ico: /assets/images/icon.png
+
+color_scheme: light
+
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 2
+  preview_words_before: 3
+  preview_words_after: 3
+  tokenizer_separator: /[\s/]+/
+  rel_url: true
+  button: false
+
+aux_links:
+  "GitHub": https://github.com/ChuKhaLi/ViettelConnect
+
+aux_links_new_tab: true
+
+footer_content: "ViettelConnect - giấy phép MIT. Dự án cộng đồng, không liên kết với Viettel-CA. Chưa phát hành, chưa kiểm chứng với tài khoản Viettel thật."
+
+heading_anchors: true
+
+back_to_top: true
+back_to_top_text: "Về đầu trang"
+
+exclude:
+  - superpowers/
+  - Gemfile
+  - Gemfile.lock
+  - vendor/
+  - node_modules/
