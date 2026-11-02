@@ -4,13 +4,13 @@ using ViettelConnect.MySign.Domain.Signing;
 namespace ViettelConnect.MySign.Application.UseCases;
 
 /// <summary>Phản hồi gửi lại Viettel. <c>JsonBody</c> đúng định dạng Viettel chờ (có thể chứa token nên <c>ToString</c> không in nó).</summary>
-public sealed record CallbackResponse(int HttpStatus, string JsonBody)
+internal sealed record CallbackResponse(int HttpStatus, string JsonBody)
 {
     public override string ToString() => $"CallbackResponse {{ HttpStatus = {HttpStatus} }}";
 }
 
 /// <summary>Kết cục ký do callback báo về. <c>Signatures</c> rỗng trừ khi <c>Status</c> là Succeeded.</summary>
-public sealed record CallbackSignOutcome(
+internal sealed record CallbackSignOutcome(
     string TenantKey,
     string TransactionId,
     SignStatus Status,
@@ -22,4 +22,4 @@ public sealed record CallbackSignOutcome(
 }
 
 /// <summary>Kết quả bắt đầu ký bất đồng bộ: mã giao dịch để đối chiếu với callback và chứng thư đã chọn.</summary>
-public sealed record BeginSignResult(string TransactionId, Certificate Certificate);
+internal sealed record BeginSignResult(string TransactionId, Certificate Certificate);

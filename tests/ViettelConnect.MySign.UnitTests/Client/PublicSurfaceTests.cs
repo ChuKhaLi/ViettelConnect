@@ -1,5 +1,7 @@
 using System.Reflection;
+using ViettelConnect.MySign.Application.Abstractions;
 using ViettelConnect.MySign.Client;
+using ViettelConnect.MySign.Domain.Errors;
 using ViettelConnect.MySign.Infrastructure.Configuration;
 using Xunit;
 
@@ -13,6 +15,35 @@ public class PublicSurfaceTests
 {
     private static readonly Assembly ClientAssembly = typeof(IViettelMySignClient).Assembly;
     private static readonly Assembly InfrastructureAssembly = typeof(MySignOptions).Assembly;
+
+    private static readonly Assembly ApplicationAssembly = typeof(ITokenCache).Assembly;
+    private static readonly Assembly DomainAssembly = typeof(MySignException).Assembly;
+
+    /// <summary>Kiểu Domain công khai: ngoại lệ + enum nhóm lỗi, chế độ ký và chứng thư (có trong cổng của ứng dụng).</summary>
+    private static readonly string[] DomainAllowList =
+    [
+        "ViettelConnect.MySign.Domain.Certificates.Certificate",
+        "ViettelConnect.MySign.Domain.Errors.MySignException",
+        "ViettelConnect.MySign.Domain.Errors.MySignTimeoutException",
+        "ViettelConnect.MySign.Domain.Errors.MySignErrorCategory",
+        "ViettelConnect.MySign.Domain.Signing.SignMode",
+    ];
+
+    /// <summary>Chỉ các cổng ứng dụng có thể tự cài (thay qua DI) cùng kiểu xuất hiện trong chữ ký của chúng.</summary>
+    private static readonly string[] ApplicationAllowList =
+    [
+        "ViettelConnect.MySign.Application.Abstractions.AccessToken",
+        "ViettelConnect.MySign.Application.Abstractions.CallbackClient",
+        "ViettelConnect.MySign.Application.Abstractions.ICallbackClientResolver",
+        "ViettelConnect.MySign.Application.Abstractions.ICallbackTokenStore",
+        "ViettelConnect.MySign.Application.Abstractions.ICertificateSelector",
+        "ViettelConnect.MySign.Application.Abstractions.ICorrelationIdAccessor",
+        "ViettelConnect.MySign.Application.Abstractions.IMySignCredentialsAccessor",
+        "ViettelConnect.MySign.Application.Abstractions.IPendingSignatureStore",
+        "ViettelConnect.MySign.Application.Abstractions.ITokenCache",
+        "ViettelConnect.MySign.Application.Abstractions.MySignCredentials",
+        "ViettelConnect.MySign.Application.Abstractions.PendingSignature",
+    ];
 
     private static readonly string[] InfrastructureAllowList =
     [
@@ -92,6 +123,42 @@ public class PublicSurfaceTests
         var exported = InfrastructureAssembly.GetExportedTypes().Select(t => t.FullName!).ToArray();
         var unexpected = exported.Except(InfrastructureAllowList).ToArray();
         Assert.True(unexpected.Length == 0, "Unexpected public Infrastructure types: " + string.Join(", ", unexpected));
+    }
+
+    [Fact]
+    public void Domain_exports_only_the_allow_list()
+    {
+        var unexpected = DomainAssembly.GetExportedTypes().Select(t => t.FullName!).Except(DomainAllowList).ToArray();
+        Assert.True(unexpected.Length == 0, "Unexpected public Domain types: " + string.Join(", ", unexpected));
+        Assert.Equal(DomainAllowList.Order(), DomainAssembly.GetExportedTypes().Select(t => t.FullName!).Order());
+    }
+
+    [Fact]
+    public void Application_exports_only_the_allow_list()
+    {
+        var exported = ApplicationAssembly.GetExportedTypes().Select(t => t.FullName!).ToArray();
+        var unexpected = exported.Except(ApplicationAllowList).ToArray();
+        Assert.True(unexpected.Length == 0, "Unexpected public Application types: " + string.Join(", ", unexpected));
+        Assert.Equal(ApplicationAllowList.Order(), exported.Order());
+    }
+
+    [Fact]
+    public void Public_application_ports_only_expose_public_types()
+    {
+        // Mọi kiểu công khai của Application phải dùng được từ ngoài assembly: chữ ký không được trỏ vào kiểu nội bộ.
+        var offenders = new List<string>();
+        foreach (var type in ApplicationAssembly.GetExportedTypes())
+        {
+            foreach (var (member, used) in PublicSignatureTypes(type))
+            {
+                foreach (var t in Flatten(used).Where(t => !t.IsVisible))
+                {
+                    offenders.Add($"{type.Name}.{member}: {t.FullName}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0, "Non-visible types in public ports: " + string.Join(", ", offenders));
     }
 
     [Theory]

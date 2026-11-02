@@ -282,11 +282,11 @@ public class MySignWireClientTests
     }
 
     [Theory]
-    [InlineData("4002", SignStatus.Rejected)]
-    [InlineData("4001", SignStatus.TimedOut)]
-    [InlineData("4004", SignStatus.Failed)]
-    [InlineData("4999", SignStatus.Pending)]
-    public async Task GetStatus_classifies_terminal_and_unknown_codes(string raw, SignStatus expected)
+    [InlineData("4002", nameof(SignStatus.Rejected))]
+    [InlineData("4001", nameof(SignStatus.TimedOut))]
+    [InlineData("4004", nameof(SignStatus.Failed))]
+    [InlineData("4999", nameof(SignStatus.Pending))]
+    public async Task GetStatus_classifies_terminal_and_unknown_codes(string raw, string expected)
     {
         await using var fake = await FakeMySignServer.StartAsync();
         fake.Scenario.StatusSequence["tx-q"] = [raw];
@@ -294,7 +294,7 @@ public class MySignWireClientTests
         var snap = await NewClient(fake.BaseUrl).GetStatusAsync(Creds, "tx-q", CancellationToken.None);
 
         Assert.Equal(raw, snap.RawStatus);
-        Assert.Equal(expected, snap.Status);
+        Assert.Equal(Enum.Parse<SignStatus>(expected), snap.Status);
     }
 
     [Theory]

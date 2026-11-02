@@ -32,7 +32,7 @@ Thông điệp lỗi thô của Viettel **không** nằm trong `Detail` trừ kh
 | `CallbackValidation` | Dự phòng — hiện SDK **không** ném nhóm này. Callback sai (token hết hạn/sai, giao dịch không biết, thân hỏng) được báo bằng `status_code` khác `"00"` trong phản hồi callback, không bằng ngoại lệ. | Xem [Callback](./callback). |
 | `Unknown` | Mã không có trong bảng (lỗi 4xx), hoặc không lưu được giao dịch chờ callback (`InnerException` là lỗi gốc của kho) | Bật chẩn đoán để xem mã gốc. |
 
-Bảng ánh xạ mã Viettel sang nhóm nằm ở `MySignErrorCatalog` (Domain), lập theo tài liệu Viettel v1.8 (Phụ lục 1, danh sách mã lỗi chung, và bảng mã trạng thái `meta_data.status`).
+Bảng ánh xạ mã Viettel sang nhóm nằm trong SDK (nội bộ, không phải API công khai), lập theo tài liệu Viettel v1.8 (Phụ lục 1, danh sách mã lỗi chung, và bảng mã trạng thái `meta_data.status`).
 
 ## Không bao giờ có trong lỗi / log
 

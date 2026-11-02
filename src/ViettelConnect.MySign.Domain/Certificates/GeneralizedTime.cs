@@ -3,7 +3,7 @@ using System.Globalization;
 namespace ViettelConnect.MySign.Domain.Certificates;
 
 /// <summary>Phân tích thời gian dạng GeneralizedTime: YYYYMMDDHHMMSS cộng Z hoặc +hhmm/-hhmm.</summary>
-public static class GeneralizedTime
+internal static class GeneralizedTime
 {
     private const int DateTimeLength = 14;
 

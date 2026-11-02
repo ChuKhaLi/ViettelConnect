@@ -9,7 +9,7 @@ namespace ViettelConnect.MySign.Domain.Errors;
 /// 59033 và mã chuỗi (invalid_request, ...) từ các ví dụ phản hồi lỗi của login/signHash.
 /// Mã không có trong bảng, hoặc lỗi phía máy chủ Viettel, là Unknown.
 /// </summary>
-public static class MySignErrorCatalog
+internal static class MySignErrorCatalog
 {
     private static readonly Dictionary<string, MySignErrorCategory> Table = Build();
 

@@ -7,7 +7,7 @@ namespace ViettelConnect.MySign.Application.Signing;
 /// Mã hoá tên tài liệu hiển thị cho MySign: bỏ dấu tiếng Việt, chỉ giữ [A-Za-z0-9_- ],
 /// rồi base64(UTF-8) với độ dài &lt; 100 ký tự.
 /// </summary>
-public static class DisplayLabelEncoder
+internal static class DisplayLabelEncoder
 {
     // base64 length = 4 * ceil(n / 3); n = 72 gives 96 (< 100), n = 75 gives 100.
     private const int MaxSourceLength = 72;

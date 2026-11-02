@@ -1,7 +1,7 @@
 namespace ViettelConnect.MySign.Domain.Signing;
 
 /// <summary>Phân loại meta_data.status của yêu cầu ký (tài liệu Viettel, mục Bảng mã trạng thái).</summary>
-public static class SignStatusCodes
+internal static class SignStatusCodes
 {
     public static SignStatus Classify(string? code) => code switch
     {

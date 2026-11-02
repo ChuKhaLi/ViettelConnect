@@ -1,6 +1,6 @@
 namespace ViettelConnect.MySign.Application.Abstractions;
 
-public interface IDelayer
+internal interface IDelayer
 {
     Task DelayAsync(TimeSpan delay, CancellationToken ct);
 }

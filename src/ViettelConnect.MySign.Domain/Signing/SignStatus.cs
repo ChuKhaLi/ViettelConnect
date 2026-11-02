@@ -1,6 +1,6 @@
 namespace ViettelConnect.MySign.Domain.Signing;
 
-public enum SignStatus
+internal enum SignStatus
 {
     Pending,
     Succeeded,
