@@ -9,6 +9,10 @@ namespace ViettelConnect.MySign.Client.Dtos;
 /// <param name="ValidTo">Hiệu lực đến (UTC).</param>
 /// <param name="KeyEnabled">Khoá ký đang bật.</param>
 /// <param name="Chain">Chuỗi chứng thư dạng DER thô; chứng thư người ký đứng đầu.</param>
+/// <remarks>
+/// Bản ghi so sánh các mảng <c>byte[]</c> (và danh sách chứa chúng) theo tham chiếu: hai bản ghi cùng nội dung byte nhưng khác mảng thì <c>==</c>/<c>Equals</c> trả
+/// <c>false</c>, và <c>GetHashCode</c> cũng theo tham chiếu. Muốn so nội dung, so từng mảng bằng <c>SequenceEqual</c>.
+/// </remarks>
 public sealed record CertificateDto(
     string CredentialId,
     string? SerialNumber,

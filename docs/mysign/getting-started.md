@@ -71,6 +71,8 @@ IReadOnlyList<byte[]> chain = result.Certificate.Chain; // DER, chứng thư ng�
 
 `DisplayName` có dấu tiếng Việt được; SDK tự chuẩn hoá (bỏ dấu, `đ` thành `d`, cắt cho vừa giới hạn của Viettel). Ví dụ chạy được: `samples/ViettelConnect.MySign.Sample.Console`.
 
+> **Lưu ý khi so sánh DTO:** các bản ghi chứa `byte[]` (`HashDocumentDto`, `DocumentSignatureDto`, `CertificateDto.Chain`) so sánh mảng theo tham chiếu, không theo nội dung, nên `==`/`Equals` giữa hai bản ghi cùng byte nhưng khác mảng trả `false`. Cần so nội dung thì dùng `SequenceEqual` trên từng mảng.
+
 ## 4. Chọn chứng thư
 
 Mặc định SDK chọn chứng thư đầu tiên còn hiệu lực. Để chọn đích danh: `ListCertificatesAsync()` rồi truyền `CredentialId` vào `SignHashesRequestDto`.
