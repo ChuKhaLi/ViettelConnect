@@ -49,6 +49,9 @@ internal sealed class FakeMySignScenario
 
     /// <summary>Bật thì mọi route trừ login yêu cầu Bearer do login cấp; thiếu/sai thì 401 59033.</summary>
     public bool RequireBearer { get; set; }
+
+    /// <summary>Login của client_id này chỉ trả lời sau khi task tương ứng hoàn tất (kiểm chứng tách biệt giữa đơn vị).</summary>
+    public ConcurrentDictionary<string, Task> LoginGateByClient { get; } = new();
 }
 
 /// <summary>
@@ -66,6 +69,7 @@ internal sealed class FakeMySignServer : IAsyncDisposable
     private readonly ConcurrentDictionary<string, List<string>> _hashesByTx = new();
     private readonly ConcurrentDictionary<string, int> _statusCallsByTx = new();
     private readonly ConcurrentDictionary<string, byte> _issuedTokens = new();
+    private readonly ConcurrentDictionary<string, string> _lastTokenByClient = new();
     private int _loginCount;
     private int _txSeq;
     private int _tokenSeq;
@@ -85,6 +89,12 @@ internal sealed class FakeMySignServer : IAsyncDisposable
     public FakeMySignScenario Scenario => _scenario;
 
     public int LoginCount => Volatile.Read(ref _loginCount);
+
+    /// <summary>Làm mọi token đã cấp mất hiệu lực (mô phỏng hết hạn phía máy chủ).</summary>
+    public void RevokeIssuedTokens() => _issuedTokens.Clear();
+
+    /// <summary>Token mới nhất đã cấp cho client_id (để test đối chiếu header).</summary>
+    public string TokenIssuedFor(string clientId) => _lastTokenByClient[clientId];
 
     public IReadOnlyList<RecordedRequest> Requests
     {
@@ -144,10 +154,26 @@ internal sealed class FakeMySignServer : IAsyncDisposable
             });
         }
 
-        Map("ras/v1/login", async (ctx, _) =>
+        Map("ras/v1/login", async (ctx, loginBody) =>
         {
+            string? clientId;
+            using (var loginDoc = JsonDocument.Parse(loginBody))
+            {
+                clientId = loginDoc.RootElement.TryGetProperty("client_id", out var cid) ? cid.GetString() : null;
+            }
+
+            if (clientId is not null && self!._scenario.LoginGateByClient.TryGetValue(clientId, out var gate))
+            {
+                await gate;
+            }
+
             var token = "fake-token-" + Interlocked.Increment(ref self!._tokenSeq);
             self._issuedTokens[token] = 0;
+            if (clientId is not null)
+            {
+                self._lastTokenByClient[clientId] = token;
+            }
+
             await Write(ctx, 200, JsonSerializer.Serialize(new Dictionary<string, object>
             {
                 ["access_token"] = token,

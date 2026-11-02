@@ -1,4 +1,5 @@
 using ViettelConnect.MySign.Domain.Errors;
+using ViettelConnect.MySign.Infrastructure.Logging;
 
 namespace ViettelConnect.MySign.Infrastructure.Wire.Mapping;
 
@@ -56,7 +57,9 @@ internal static class ErrorMapper
 
     private static string Scrub(string raw, string secret)
     {
-        var text = string.IsNullOrEmpty(secret) ? raw : raw.Replace(secret, "<redacted>", StringComparison.Ordinal);
+        // Che đúng secret của lời gọi trước (kể cả khi nằm ngoài JSON), rồi áp bộ che chung (access token, Bearer...).
+        var text = string.IsNullOrEmpty(secret) ? raw : raw.Replace(secret, MySignLogScrubber.Mask, StringComparison.Ordinal);
+        text = MySignLogScrubber.Scrub(text);
         return text.Length <= MaxRawLength ? text : text[..MaxRawLength] + "...";
     }
 }
