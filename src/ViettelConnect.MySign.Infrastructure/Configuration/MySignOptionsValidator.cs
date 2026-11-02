@@ -57,6 +57,11 @@ public sealed class MySignOptionsValidator : IValidateOptions<MySignOptions>
         {
             errors.Add($"{s}:Callback:TokenLifetime must be > 0.");
         }
+        // Cả hai trống = tắt callback (hợp lệ); chỉ một trong hai là cấu hình dở dang.
+        if (string.IsNullOrWhiteSpace(options.Callback.ClientId) != string.IsNullOrWhiteSpace(options.Callback.ClientSecret))
+        {
+            errors.Add($"{s}:Callback:ClientId and {s}:Callback:ClientSecret must be set together (leave both empty to disable callbacks).");
+        }
         if (options.Advanced.PollingAsyncCode is not (1 or 2))
         {
             errors.Add($"{s}:Advanced:PollingAsyncCode must be 1 or 2.");

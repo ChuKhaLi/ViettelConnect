@@ -1,4 +1,4 @@
-namespace ViettelConnect.MySign.Infrastructure.Wire.Mapping;
+namespace ViettelConnect.MySign.Application.Signing;
 
 internal static class Base64
 {

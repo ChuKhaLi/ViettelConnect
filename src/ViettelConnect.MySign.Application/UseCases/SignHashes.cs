@@ -1,5 +1,4 @@
 using ViettelConnect.MySign.Application.Abstractions;
-using ViettelConnect.MySign.Application.Signing;
 using ViettelConnect.MySign.Domain.Certificates;
 using ViettelConnect.MySign.Domain.Errors;
 using ViettelConnect.MySign.Domain.Signing;
@@ -12,7 +11,6 @@ namespace ViettelConnect.MySign.Application.UseCases;
 /// </summary>
 internal sealed class SignHashes
 {
-    private const int Sha256Length = 32;
     private const int SynchronousAsyncCode = 0;
 
     private readonly IMySignWireClient _wire;
@@ -44,33 +42,17 @@ internal sealed class SignHashes
     public async Task<SignHashesResult> ExecuteAsync(SignHashesRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
-        Validate(request);
+        SignHashesSupport.Validate(request, _correlation);
 
         var polling = _settings.SignMode == SignMode.Polling;
 
         var who = _credentials.Get();
-        var certificates = await _wire.GetCertificatesAsync(who, ct).ConfigureAwait(false);
-
-        Certificate certificate;
-        if (request.CredentialId is { } credentialId)
-        {
-            certificate = certificates.FirstOrDefault(c => string.Equals(c.CredentialId, credentialId, StringComparison.Ordinal))
-                ?? throw Fail(MySignErrorCategory.NoActiveCertificate, "Chứng thư được yêu cầu không thuộc người ký này.");
-        }
-        else
-        {
-            certificate = await _selector.SelectAsync(certificates, ct).ConfigureAwait(false);
-        }
+        var certificate = await SignHashesSupport
+            .SelectCertificateAsync(_wire, who, request.CredentialId, _selector, _correlation, ct).ConfigureAwait(false);
 
         var sad = await _authorization.GetSadAsync(who, certificate, ct).ConfigureAwait(false);
-        var wireRequest = new SignHashWireRequest(
-            certificate.CredentialId,
-            request.Documents
-                .Select(d => (d.DocumentId, DisplayLabelEncoder.Encode(d.DisplayName, d.DocumentId), d.Sha256))
-                .ToArray(),
-            string.IsNullOrWhiteSpace(request.Description) ? null : DisplayLabelEncoder.Encode(request.Description, "Document"),
-            polling ? _settings.PollingAsyncCode : SynchronousAsyncCode,
-            sad);
+        var wireRequest = SignHashesSupport.BuildWireRequest(
+            request, certificate, polling ? _settings.PollingAsyncCode : SynchronousAsyncCode, sad);
 
         var response = await _wire.SignHashAsync(who, wireRequest, ct).ConfigureAwait(false);
 
@@ -110,34 +92,6 @@ internal sealed class SignHashes
         }
 
         return new SignHashesResult(certificate, signatures, transactionId);
-    }
-
-    private void Validate(SignHashesRequest request)
-    {
-        if (request.Documents is null || request.Documents.Count == 0)
-        {
-            throw Fail(MySignErrorCategory.Validation, "Cần ít nhất một tài liệu để ký.");
-        }
-
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        for (var i = 0; i < request.Documents.Count; i++)
-        {
-            var doc = request.Documents[i];
-            if (doc is null || string.IsNullOrWhiteSpace(doc.DocumentId))
-            {
-                throw Fail(MySignErrorCategory.Validation, $"Tài liệu thứ {i + 1} thiếu DocumentId.");
-            }
-
-            if (doc.Sha256 is null || doc.Sha256.Length != Sha256Length)
-            {
-                throw Fail(MySignErrorCategory.Validation, $"Mã băm của tài liệu thứ {i + 1} phải đúng {Sha256Length} byte (SHA-256).");
-            }
-
-            if (!seen.Add(doc.DocumentId))
-            {
-                throw Fail(MySignErrorCategory.Validation, $"DocumentId của tài liệu thứ {i + 1} bị trùng.");
-            }
-        }
     }
 
     private MySignException Fail(MySignErrorCategory category, string detail) =>

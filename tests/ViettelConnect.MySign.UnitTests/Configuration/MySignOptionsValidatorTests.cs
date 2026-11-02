@@ -45,6 +45,30 @@ public sealed class MySignOptionsValidatorTests
         Assert.Contains(r.Failures!, f => f.Contains(field));
     }
 
+    [Theory]
+    [InlineData("cb", "")]
+    [InlineData("", "sec")]
+    [InlineData("cb", "  ")]
+    public void Callback_client_id_and_secret_must_be_set_together(string id, string secret)
+    {
+        var o = Valid();
+        o.Callback.ClientId = id;
+        o.Callback.ClientSecret = secret;
+        var r = Run(o);
+        Assert.False(r.Succeeded);
+        Assert.Contains(r.Failures!, f => f.Contains("Callback"));
+    }
+
+    [Fact]
+    public void Callback_disabled_or_fully_configured_is_valid()
+    {
+        var o = Valid();
+        Assert.True(Run(o).Succeeded);
+        o.Callback.ClientId = "cb";
+        o.Callback.ClientSecret = "sec";
+        Assert.True(Run(o).Succeeded);
+    }
+
     [Fact]
     public void Dynamic_mode_does_not_require_credentials()
         => Assert.True(Run(new MySignOptions { CredentialsMode = CredentialsMode.Dynamic }).Succeeded);

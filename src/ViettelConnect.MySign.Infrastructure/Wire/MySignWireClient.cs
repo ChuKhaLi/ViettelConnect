@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using ViettelConnect.MySign.Application.Abstractions;
+using ViettelConnect.MySign.Application.Signing;
 using ViettelConnect.MySign.Domain.Certificates;
 using ViettelConnect.MySign.Domain.Errors;
 using ViettelConnect.MySign.Domain.Signing;
