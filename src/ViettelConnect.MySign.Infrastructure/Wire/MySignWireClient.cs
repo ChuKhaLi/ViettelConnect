@@ -49,6 +49,9 @@ internal sealed class MySignWireClient : IMySignWireClient
         http.BaseAddress ??= _baseUri;
     }
 
+    /// <summary>Mã tương quan của lời gọi hiện tại (ưu tiên mã đang mượn khi handler xác thực tự đăng nhập).</summary>
+    private string CorrelationId => AmbientCorrelation.Resolve(_correlation);
+
     public async Task<AccessToken> LoginAsync(MySignCredentials c, CancellationToken ct)
     {
         const string op = "login";
@@ -63,12 +66,12 @@ internal sealed class MySignWireClient : IMySignWireClient
         var dto = await PostAsync<LoginRequestDto, LoginResponseDto>(MySignRoutes.Login, op, c, body, skipAuth: true, noRetry: false, ct);
         if (string.IsNullOrWhiteSpace(dto.AccessToken))
         {
-            throw ErrorMapper.Protocol(op, "access_token missing", _correlation.Current);
+            throw ErrorMapper.Protocol(op, "access_token missing", CorrelationId);
         }
 
         if (!long.TryParse(dto.ExpiresIn, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds) || seconds <= 0)
         {
-            throw ErrorMapper.Protocol(op, "expires_in missing or invalid", _correlation.Current);
+            throw ErrorMapper.Protocol(op, "expires_in missing or invalid", CorrelationId);
         }
 
         return new AccessToken(dto.AccessToken, _time.GetUtcNow().AddSeconds(seconds));
@@ -94,7 +97,7 @@ internal sealed class MySignWireClient : IMySignWireClient
         }
         catch (FormatException ex)
         {
-            throw ErrorMapper.Protocol(op, "certificate entry invalid", _correlation.Current, ex);
+            throw ErrorMapper.Protocol(op, "certificate entry invalid", CorrelationId, ex);
         }
     }
 
@@ -121,7 +124,7 @@ internal sealed class MySignWireClient : IMySignWireClient
         var dto = await PostAsync<SignHashRequestDto, SignHashResponseDto>(MySignRoutes.SignHash, op, c, body, skipAuth: false, noRetry: true, ct);
         if (dto.Signatures is null && string.IsNullOrWhiteSpace(dto.TransactionId))
         {
-            throw ErrorMapper.Protocol(op, "neither signatures nor transactionId", _correlation.Current);
+            throw ErrorMapper.Protocol(op, "neither signatures nor transactionId", CorrelationId);
         }
 
         var signatures = dto.Signatures is null ? null : DecodeSignatures(dto.Signatures, op);
@@ -155,7 +158,7 @@ internal sealed class MySignWireClient : IMySignWireClient
         }
         catch (FormatException ex)
         {
-            throw ErrorMapper.Protocol(op, "signature is not valid base64", _correlation.Current, ex);
+            throw ErrorMapper.Protocol(op, "signature is not valid base64", CorrelationId, ex);
         }
     }
 
@@ -180,6 +183,7 @@ internal sealed class MySignWireClient : IMySignWireClient
         request.Options.Set(MySignRequestOptions.Credentials, credentials);
         request.Options.Set(MySignRequestOptions.SkipAuth, skipAuth);
         request.Options.Set(MySignRequestOptions.NoRetry, noRetry);
+        request.Options.Set(MySignRequestOptions.CorrelationId, CorrelationId);
 
         HttpResponseMessage response;
         string text;
@@ -198,22 +202,22 @@ internal sealed class MySignWireClient : IMySignWireClient
                         text,
                         _includeRaw,
                         credentials.ClientSecret,
-                        _correlation.Current);
+                        CorrelationId);
                 }
             }
         }
         catch (HttpRequestException ex)
         {
-            throw ErrorMapper.Transport(op, ex, _correlation.Current);
+            throw ErrorMapper.Transport(op, ex, CorrelationId);
         }
         catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
         {
             // Hết hạn HttpClient.Timeout (không phải người gọi huỷ).
-            throw ErrorMapper.Transport(op, ex, _correlation.Current);
+            throw ErrorMapper.Transport(op, ex, CorrelationId);
         }
 
         var result = TryParse<TResponse>(text);
-        return result ?? throw ErrorMapper.Protocol(op, "body is not the expected JSON shape", _correlation.Current);
+        return result ?? throw ErrorMapper.Protocol(op, "body is not the expected JSON shape", CorrelationId);
     }
 
     private static T? TryParse<T>(string text)

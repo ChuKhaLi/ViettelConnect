@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using ViettelConnect.MySign.Application.Abstractions;
 using ViettelConnect.MySign.Domain.Certificates;
 using ViettelConnect.MySign.Domain.Errors;
+using ViettelConnect.MySign.Infrastructure.Wire;
 
 namespace ViettelConnect.MySign.Infrastructure.Logging;
 
@@ -38,7 +39,7 @@ internal sealed class MySignCallLogger : IMySignWireClient
 
     private async Task<T> Wrap<T>(string endpoint, Func<Task<T>> action)
     {
-        var cid = _correlation.Current;
+        var cid = AmbientCorrelation.Resolve(_correlation);
         _logger.LogInformation(
             "MySign call started: endpoint={Endpoint}, correlationId={CorrelationId}",
             endpoint, cid);

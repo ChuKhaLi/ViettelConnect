@@ -8,7 +8,11 @@ namespace ViettelConnect.MySign.Client;
 /// Đăng ký bằng <c>services.AddViettelMySign(...)</c>; dịch vụ là scoped. Thông tin đăng nhập lấy theo từng lời gọi
 /// (chế độ Static: từ options; Dynamic: từ <c>IMySignCredentialsAccessor</c> của ứng dụng).
 /// </summary>
-/// <remarks>Lỗi nghiệp vụ/giao thức ném <see cref="MySignException"/> (hết thời gian chờ: <see cref="MySignTimeoutException"/>).</remarks>
+/// <remarks>
+/// Lỗi nghiệp vụ/giao thức ném <see cref="MySignException"/>; hết thời gian chờ người ký luôn là
+/// <see cref="MySignTimeoutException"/> ở mọi chế độ ký. Lỗi xảy ra sau khi Viettel đã nhận yêu cầu ký mang
+/// <see cref="MySignException.TransactionId"/> để đối soát.
+/// </remarks>
 public interface IViettelMySignClient
 {
     /// <summary>Liệt kê chứng thư số của người ký hiện tại.</summary>
@@ -19,8 +23,11 @@ public interface IViettelMySignClient
     /// Ký các mã băm và chờ tới khi có chữ ký: chế độ <c>Polling</c> (mặc định) hỏi trạng thái định kỳ tới hết
     /// <c>Polling:TotalTimeout</c>; chế độ <c>Synchronous</c> chờ trong một lời gọi. Chữ ký trả về đúng thứ tự tài liệu.
     /// </summary>
-    /// <exception cref="MySignException">Yêu cầu không hợp lệ, người ký từ chối, ký thất bại, vi phạm giao thức.</exception>
-    /// <exception cref="MySignTimeoutException">Người ký không xác nhận kịp.</exception>
+    /// <exception cref="MySignException">Yêu cầu không hợp lệ, người ký từ chối, ký thất bại, vi phạm giao thức, lỗi kết nối
+    /// (<see cref="MySignErrorCategory.Transport"/>; nếu xảy ra ở chính lời gọi signHash thì đừng tự gửi lại vì người ký có thể
+    /// đã nhận lời nhắc). Khi hỏi trạng thái, lỗi kết nối tạm thời được coi là đang chờ tới hạn chót.</exception>
+    /// <exception cref="MySignTimeoutException">Người ký không xác nhận kịp — cả chế độ <c>Synchronous</c> (Viettel trả hết giờ)
+    /// lẫn <c>Polling</c> (trạng thái hết giờ hoặc hết <c>Polling:TotalTimeout</c>).</exception>
     Task<SignHashesResultDto> SignHashesAsync(SignHashesRequestDto request, CancellationToken ct = default);
 
     /// <summary>
@@ -31,6 +38,8 @@ public interface IViettelMySignClient
     /// <param name="tenantKey">Đơn vị (lab) sở hữu giao dịch; phải khớp đơn vị của client callback mà Viettel dùng.
     /// Mặc định <c>"default"</c> khớp client callback cấu hình trong <c>Viettel:MySign:Callback</c>.</param>
     /// <param name="ct">Huỷ lời gọi.</param>
+    /// <exception cref="MySignException">Yêu cầu không hợp lệ, lỗi Viettel hoặc lỗi kết nối; nếu yêu cầu đã gửi nhưng không lưu
+    /// được giao dịch chờ, lỗi mang <see cref="MySignException.TransactionId"/>.</exception>
     Task<BeginSignResultDto> BeginSignHashesAsync(SignHashesRequestDto request, string tenantKey = "default", CancellationToken ct = default);
 
     /// <summary>

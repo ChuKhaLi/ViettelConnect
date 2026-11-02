@@ -59,14 +59,28 @@ internal sealed class BeginSignHashes
                 _correlation, MySignErrorCategory.ProtocolViolation, "MySign không trả mã giao dịch cho yêu cầu ký bất đồng bộ.");
         }
 
-        await _pending.SaveAsync(
-            new PendingSignature(
-                response.TransactionId,
-                tenantKey,
-                certificate,
-                request.Documents.Select(d => d.DocumentId).ToArray(),
-                _time.GetUtcNow()),
-            ct).ConfigureAwait(false);
+        try
+        {
+            await _pending.SaveAsync(
+                new PendingSignature(
+                    response.TransactionId,
+                    tenantKey,
+                    certificate,
+                    request.Documents.Select(d => d.DocumentId).ToArray(),
+                    _time.GetUtcNow()),
+                ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not MySignException)
+        {
+            // Yêu cầu đã tới người ký nhưng không lưu được giao dịch chờ: báo lỗi kèm mã giao dịch để ứng dụng đối soát.
+            throw new MySignException(
+                MySignErrorCategory.Unknown,
+                rawCode: null,
+                $"Đã gửi yêu cầu ký nhưng không lưu được giao dịch chờ callback ({ex.GetType().Name}).",
+                _correlation.Current,
+                ex,
+                response.TransactionId);
+        }
 
         return new BeginSignResult(response.TransactionId, certificate);
     }

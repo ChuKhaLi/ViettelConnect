@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.Options;
 using ViettelConnect.MySign.Application.Abstractions;
@@ -11,9 +10,10 @@ namespace ViettelConnect.MySign.Infrastructure.Http;
 /// <summary>
 /// Thử lại có giới hạn, lùi mũ kèm jitter đầy đủ. Thử lại 5xx, 429, <see cref="HttpRequestException"/> và hết
 /// thời gian chờ của thao tác. Với 429 có <c>Retry-After</c>, giá trị header (chặn trên bởi <c>MaxDelay</c>) thay
-/// cho thời gian lùi tính toán. Người gọi huỷ thì ném lại nguyên trạng. Hết số lần thì ném
-/// <see cref="MySignException"/> loại <see cref="MySignErrorCategory.Transport"/>. Mỗi lần gửi dùng bản sao
-/// của request (thân được đệm) nên gửi lại được.
+/// cho thời gian lùi tính toán. Người gọi huỷ thì ném lại nguyên trạng. Hết số lần: nếu lần cuối là phản hồi
+/// 5xx/429 thì trả phản hồi đó (wire client phân loại theo thân lỗi Viettel); nếu là lỗi mạng/hết giờ thì ném
+/// <see cref="MySignException"/> loại <see cref="MySignErrorCategory.Transport"/> mang mã tương quan của chính request
+/// (<see cref="MySignRequestOptions.CorrelationId"/>). Mỗi lần gửi dùng bản sao của request (thân được đệm) nên gửi lại được.
 /// </summary>
 internal sealed class TransientFailureRetryHandler : DelegatingHandler
 {
@@ -101,15 +101,25 @@ internal sealed class TransientFailureRetryHandler : DelegatingHandler
             await _delayer.DelayAsync(TimeSpan.FromMilliseconds(delayMs), cancellationToken).ConfigureAwait(false);
         }
 
-        var statusCode = lastResponse?.StatusCode;
-        lastResponse?.Dispose();
+        // Lần thử cuối vẫn 5xx/429: trả nguyên phản hồi để wire client phân loại theo mã lỗi Viettel trong thân
+        // (vd signHash 500 {"error":"58083"} là SignFailed); không có mã nhận diện được thì ErrorMapper ra Transport.
+        if (lastResponse is not null)
+        {
+            return lastResponse;
+        }
+
         throw new MySignException(
             MySignErrorCategory.Transport,
-            statusCode is null ? null : ((int)statusCode.Value).ToString(CultureInfo.InvariantCulture),
-            BuildExhaustedDetail(statusCode, lastException, maxAttempts),
-            _correlation.Current,
+            null,
+            BuildExhaustedDetail(lastException, maxAttempts),
+            CorrelationIdOf(request),
             lastException);
     }
+
+    private string CorrelationIdOf(HttpRequestMessage request) =>
+        request.Options.TryGetValue(MySignRequestOptions.CorrelationId, out var id) && !string.IsNullOrWhiteSpace(id)
+            ? id
+            : _correlation.Current;
 
     private int ComputeBackoffMs(int attempt, int baseDelayMs, int maxDelayMs, HttpResponseMessage? response)
     {
@@ -141,18 +151,8 @@ internal sealed class TransientFailureRetryHandler : DelegatingHandler
     private static bool IsTransient(HttpStatusCode code) =>
         code == HttpStatusCode.TooManyRequests || (int)code >= 500;
 
-    private static string BuildExhaustedDetail(HttpStatusCode? lastStatus, Exception? lastException, int attempts)
-    {
-        if (lastStatus is not null)
-        {
-            return $"MySign transport retries exhausted (attempts={attempts}, lastStatus={(int)lastStatus.Value}).";
-        }
-
-        if (lastException is not null)
-        {
-            return $"MySign transport retries exhausted (attempts={attempts}, lastException={lastException.GetType().Name}).";
-        }
-
-        return $"MySign transport retries exhausted (attempts={attempts}).";
-    }
+    private static string BuildExhaustedDetail(Exception? lastException, int attempts) =>
+        lastException is not null
+            ? $"MySign transport retries exhausted (attempts={attempts}, lastException={lastException.GetType().Name})."
+            : $"MySign transport retries exhausted (attempts={attempts}).";
 }

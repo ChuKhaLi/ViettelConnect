@@ -181,6 +181,64 @@ public class SignSynchronousFakeServerTests
     }
 
     [Fact]
+    public async Task Sync_signHash_58061_throws_timeout_exception_like_polling_mode()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ErrorByRoute["signHash"] = (400, "{\"error\":\"58061\",\"error_description\":\"Request timeout for mobile authorisation\"}");
+        var (sign, _) = Build(fake);
+
+        var ex = await Assert.ThrowsAsync<MySignTimeoutException>(
+            () => sign.ExecuteAsync(new SignHashesRequest([Doc("1")], null, null), CancellationToken.None));
+
+        Assert.Equal(MySignErrorCategory.SignTimeout, ex.Category);
+        Assert.Equal("58061", ex.RawCode);
+        Assert.Equal("corr-test", ex.CorrelationId);
+    }
+
+    [Fact]
+    public async Task Sync_signHash_58062_is_sign_rejected_not_timeout()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ErrorByRoute["signHash"] = (400, "{\"error\":\"58062\"}");
+        var (sign, _) = Build(fake);
+
+        var ex = await Assert.ThrowsAsync<MySignException>(
+            () => sign.ExecuteAsync(new SignHashesRequest([Doc("1")], null, null), CancellationToken.None));
+
+        Assert.IsNotType<MySignTimeoutException>(ex);
+        Assert.Equal(MySignErrorCategory.SignRejected, ex.Category);
+        Assert.Equal("58062", ex.RawCode);
+    }
+
+    [Fact]
+    public async Task SignHash_500_with_viettel_error_code_is_classified_by_the_code()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ErrorByRoute["signHash"] = (500, "{\"error\":\"58083\"}");
+        var (sign, _) = Build(fake);
+
+        var ex = await Assert.ThrowsAsync<MySignException>(
+            () => sign.ExecuteAsync(new SignHashesRequest([Doc("1")], null, null), CancellationToken.None));
+
+        Assert.Equal(MySignErrorCategory.SignFailed, ex.Category);
+        Assert.Equal("58083", ex.RawCode);
+        Assert.Single(fake.RequestsFor("signHash"));
+    }
+
+    [Fact]
+    public async Task Certificates_info_503_every_time_without_body_is_transport_after_retries()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ErrorByRoute["certificates/info"] = (503, string.Empty);
+        var (_, list) = Build(fake);
+
+        var ex = await Assert.ThrowsAsync<MySignException>(() => list.ExecuteAsync(CancellationToken.None));
+
+        Assert.Equal(MySignErrorCategory.Transport, ex.Category);
+        Assert.Equal(3, fake.RequestsFor("certificates/info").Count);
+    }
+
+    [Fact]
     public async Task Certificates_info_503_is_still_retried()
     {
         await using var fake = await FakeMySignServer.StartAsync();

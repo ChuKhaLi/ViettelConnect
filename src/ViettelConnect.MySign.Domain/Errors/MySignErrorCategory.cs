@@ -13,5 +13,10 @@ public enum MySignErrorCategory
     CertificateInvalid,
     Transport,
     ProtocolViolation,
+
+    /// <summary>
+    /// Dự phòng, hiện không được SDK ném: callback không hợp lệ được báo bằng <c>status_code</c> khác <c>"00"</c>
+    /// trong phản hồi callback, không bằng ngoại lệ.
+    /// </summary>
     CallbackValidation,
 }

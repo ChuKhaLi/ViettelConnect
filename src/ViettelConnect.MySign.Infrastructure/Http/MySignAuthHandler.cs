@@ -13,7 +13,8 @@ namespace ViettelConnect.MySign.Infrastructure.Http;
 /// single-flight theo khoá nên hai đơn vị không chặn hay dùng chung token của nhau. Gặp 401: xoá token, đăng nhập
 /// lại đúng một lần (chia sẻ giữa các request đồng thời), gửi lại một lần; 401 lần hai thì ném
 /// <see cref="MySignErrorCategory.Authentication"/>. Wire client được lấy qua <c>Func</c> để tránh vòng phụ thuộc
-/// handler -> wire client -> HttpClient -> handler.
+/// handler -> wire client -> HttpClient -> handler. Lỗi do handler ném (và lượt login nó khởi phát) mang mã tương quan
+/// của chính request (<see cref="MySignRequestOptions.CorrelationId"/>), không phải của scope handler.
 /// </summary>
 internal sealed class MySignAuthHandler : DelegatingHandler
 {
@@ -52,9 +53,10 @@ internal sealed class MySignAuthHandler : DelegatingHandler
             throw new InvalidOperationException("MySign request has no credentials attached; cannot choose a Bearer token.");
         }
 
+        var correlationId = CorrelationIdOf(request);
         var body = await RequestCloner.BufferContentAsync(request, cancellationToken).ConfigureAwait(false);
 
-        var token = await GetTokenAsync(credentials, staleValue: null, cancellationToken).ConfigureAwait(false);
+        var token = await GetTokenAsync(credentials, staleValue: null, correlationId, cancellationToken).ConfigureAwait(false);
         using (var first = RequestCloner.Clone(request, body, skipAuthorizationHeader: true))
         {
             first.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Value);
@@ -69,7 +71,7 @@ internal sealed class MySignAuthHandler : DelegatingHandler
 
         // 401: token bị từ chối. Lượt làm mới chỉ đăng nhập lại nếu cache vẫn giữ đúng token vừa bị từ chối,
         // để các request 401 đồng thời (hoặc đến muộn) dùng lại token mới thay vì đăng nhập thêm.
-        var refreshed = await GetTokenAsync(credentials, staleValue: token.Value, cancellationToken).ConfigureAwait(false);
+        var refreshed = await GetTokenAsync(credentials, staleValue: token.Value, correlationId, cancellationToken).ConfigureAwait(false);
         using var retry = RequestCloner.Clone(request, body, skipAuthorizationHeader: true);
         retry.Headers.Authorization = new AuthenticationHeaderValue("Bearer", refreshed.Value);
         var retryResponse = await base.SendAsync(retry, cancellationToken).ConfigureAwait(false);
@@ -81,13 +83,22 @@ internal sealed class MySignAuthHandler : DelegatingHandler
                 MySignErrorCategory.Authentication,
                 "401",
                 "MySign rejected the request with 401 even after a fresh access token.",
-                _correlation.Current);
+                correlationId);
         }
 
         return retryResponse;
     }
 
-    private async Task<AccessToken> GetTokenAsync(MySignCredentials credentials, string? staleValue, CancellationToken ct)
+    private string CorrelationIdOf(HttpRequestMessage request) =>
+        request.Options.TryGetValue(MySignRequestOptions.CorrelationId, out var id) && !string.IsNullOrWhiteSpace(id)
+            ? id
+            : _correlation.Current;
+
+    private async Task<AccessToken> GetTokenAsync(
+        MySignCredentials credentials,
+        string? staleValue,
+        string correlationId,
+        CancellationToken ct)
     {
         var key = credentials.CacheKey;
         if (staleValue is null)
@@ -110,7 +121,15 @@ internal sealed class MySignAuthHandler : DelegatingHandler
                 }
 
                 await _cache.RemoveAsync(key, CancellationToken.None).ConfigureAwait(false);
-                var fresh = await _wireFactory().LoginAsync(credentials, CancellationToken.None).ConfigureAwait(false);
+
+                // Wire client lấy từ scope của handler: mượn mã của request gốc để login ghi log/ném lỗi đúng mã.
+                // (Lượt login dùng chung giữa các request cùng khoá mang mã của request khởi phát nó.)
+                AccessToken fresh;
+                using (AmbientCorrelation.Use(correlationId))
+                {
+                    fresh = await _wireFactory().LoginAsync(credentials, CancellationToken.None).ConfigureAwait(false);
+                }
+
                 await _cache.SetAsync(key, fresh, CancellationToken.None).ConfigureAwait(false);
                 return fresh;
             },

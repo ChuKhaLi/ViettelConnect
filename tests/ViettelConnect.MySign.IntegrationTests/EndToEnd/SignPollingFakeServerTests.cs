@@ -222,4 +222,86 @@ public class SignPollingFakeServerTests
 
         Assert.Single(fake.RequestsFor("requests/status"));
     }
+
+    [Fact]
+    public async Task Transient_status_poll_failures_are_treated_as_pending()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        // TestPipeline thử 3 lần mỗi lời gọi: 6 lần 503 = hai lần hỏi trạng thái thất bại (Transport) rồi "1".
+        fake.Scenario.FailTimesByRoute["requests/status"] = (503, 6);
+        var (sign, delayer) = Build(fake);
+
+        var result = await sign.ExecuteAsync(Request(Doc("a")), CancellationToken.None);
+
+        Assert.Equal(FirstTx, result.TransactionId);
+        Assert.Single(result.Signatures);
+        Assert.Equal(7, fake.RequestsFor("requests/status").Count);
+        Assert.Equal(2, delayer.Calls);
+    }
+
+    [Fact]
+    public async Task Status_endpoint_down_until_deadline_ends_in_timeout_with_transaction_id()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ErrorByRoute["requests/status"] = (503, string.Empty);
+        var (sign, _) = Build(fake);
+
+        var ex = await Assert.ThrowsAsync<MySignTimeoutException>(() => sign.ExecuteAsync(Request(Doc("a")), CancellationToken.None));
+
+        Assert.Equal(FirstTx, ex.TransactionId);
+        Assert.Equal("corr-test", ex.CorrelationId);
+    }
+
+    [Fact]
+    public async Task Final_timeout_carries_the_last_raw_status()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.StatusSequence[FirstTx] = ["4000", "4999"];
+        var (sign, _) = Build(fake);
+
+        var ex = await Assert.ThrowsAsync<MySignTimeoutException>(() => sign.ExecuteAsync(Request(Doc("a")), CancellationToken.None));
+
+        Assert.Equal("4999", ex.RawCode);
+        Assert.Equal(FirstTx, ex.TransactionId);
+    }
+
+    [Fact]
+    public async Task Post_submission_rejection_carries_transaction_id()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.StatusSequence[FirstTx] = ["4000", "4002"];
+        var (sign, _) = Build(fake);
+
+        var ex = await Assert.ThrowsAsync<MySignException>(() => sign.ExecuteAsync(Request(Doc("a")), CancellationToken.None));
+
+        Assert.Equal(MySignErrorCategory.SignRejected, ex.Category);
+        Assert.Equal(FirstTx, ex.TransactionId);
+    }
+
+    [Fact]
+    public async Task Post_submission_failure_and_protocol_violation_carry_transaction_id()
+    {
+        await using (var fake = await FakeMySignServer.StartAsync())
+        {
+            fake.Scenario.StatusSequence[FirstTx] = ["4004"];
+            var (sign, _) = Build(fake);
+
+            var failed = await Assert.ThrowsAsync<MySignException>(() => sign.ExecuteAsync(Request(Doc("a")), CancellationToken.None));
+
+            Assert.Equal(MySignErrorCategory.SignFailed, failed.Category);
+            Assert.Equal(FirstTx, failed.TransactionId);
+        }
+
+        await using (var fake = await FakeMySignServer.StartAsync())
+        {
+            fake.Scenario.DropLastSignature = true;
+            var (sign, _) = Build(fake);
+
+            var protocol = await Assert.ThrowsAsync<MySignException>(
+                () => sign.ExecuteAsync(Request(Doc("a"), Doc("b")), CancellationToken.None));
+
+            Assert.Equal(MySignErrorCategory.ProtocolViolation, protocol.Category);
+            Assert.Equal(FirstTx, protocol.TransactionId);
+        }
+    }
 }

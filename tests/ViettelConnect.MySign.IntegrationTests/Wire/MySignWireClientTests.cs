@@ -340,7 +340,7 @@ public class MySignWireClientTests
     }
 
     [Fact]
-    public async Task Error_non_json_body_is_unknown_without_leaking_body()
+    public async Task Error_5xx_non_json_body_is_transport_without_leaking_body()
     {
         await using var fake = await FakeMySignServer.StartAsync();
         fake.Scenario.ErrorByRoute["requests/status"] = (502, "<html>Bad gateway SECRET-PAGE</html>");
@@ -348,7 +348,7 @@ public class MySignWireClientTests
         var ex = await Assert.ThrowsAsync<MySignException>(
             () => NewClient(fake.BaseUrl).GetStatusAsync(Creds, "tx-1", CancellationToken.None));
 
-        Assert.Equal(MySignErrorCategory.Unknown, ex.Category);
+        Assert.Equal(MySignErrorCategory.Transport, ex.Category);
         Assert.Null(ex.RawCode);
         Assert.DoesNotContain("SECRET-PAGE", ex.Detail);
     }

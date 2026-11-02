@@ -82,7 +82,8 @@ internal sealed class SignHashes
         {
             throw Fail(
                 MySignErrorCategory.ProtocolViolation,
-                $"MySign trả {wireSignatures?.Count ?? 0} chữ ký cho {request.Documents.Count} mã băm.");
+                $"MySign trả {wireSignatures?.Count ?? 0} chữ ký cho {request.Documents.Count} mã băm.",
+                transactionId);
         }
 
         var signatures = new DocumentSignature[request.Documents.Count];
@@ -94,6 +95,6 @@ internal sealed class SignHashes
         return new SignHashesResult(certificate, signatures, transactionId);
     }
 
-    private MySignException Fail(MySignErrorCategory category, string detail) =>
-        new(category, rawCode: null, detail, _correlation.Current);
+    private MySignException Fail(MySignErrorCategory category, string detail, string? transactionId = null) =>
+        new(category, rawCode: null, detail, _correlation.Current, transactionId: transactionId);
 }

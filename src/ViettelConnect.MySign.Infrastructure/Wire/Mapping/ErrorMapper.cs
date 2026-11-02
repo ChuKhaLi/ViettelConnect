@@ -10,7 +10,8 @@ internal static class ErrorMapper
     /// <summary>
     /// Dựng <see cref="MySignException"/> từ phản hồi lỗi (non-2xx). Thông điệp mặc định chỉ chứa tên thao tác,
     /// mã HTTP và mã lỗi; thân thô của Viettel chỉ được thêm khi <paramref name="includeRaw"/> và đã che
-    /// <paramref name="secret"/>.
+    /// <paramref name="secret"/>. Nhóm <see cref="MySignErrorCategory.SignTimeout"/> trả <see cref="MySignTimeoutException"/>;
+    /// 5xx/429 không có mã Viettel nhận diện được là <see cref="MySignErrorCategory.Transport"/>.
     /// </summary>
     public static MySignException FromHttpError(
         string operation,
@@ -37,13 +38,22 @@ internal static class ErrorMapper
             category = MySignErrorCategory.Authentication;
         }
 
+        // 5xx/429 không kèm mã Viettel nhận diện được (handler retry đã trả phản hồi của lần thử cuối): lỗi kết nối/máy chủ.
+        if (category == MySignErrorCategory.Unknown && (httpStatus >= 500 || httpStatus == 429))
+        {
+            category = MySignErrorCategory.Transport;
+        }
+
         var detail = $"MySign {operation} failed (HTTP {httpStatus}, code {code ?? "<none>"}).";
         if (includeRaw && !string.IsNullOrEmpty(rawBody))
         {
             detail += " Raw response: " + Scrub(rawBody, secret);
         }
 
-        return new MySignException(category, code, detail, correlationId);
+        // Hợp đồng lỗi thống nhất giữa các chế độ ký: hết giờ chờ người ký luôn là MySignTimeoutException.
+        return category == MySignErrorCategory.SignTimeout
+            ? new MySignTimeoutException(detail, correlationId, transactionId: null, rawCode: code)
+            : new MySignException(category, code, detail, correlationId);
     }
 
     public static MySignException Protocol(string operation, string what, string correlationId, Exception? inner = null) =>

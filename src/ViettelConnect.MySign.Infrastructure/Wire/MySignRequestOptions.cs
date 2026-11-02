@@ -14,4 +14,10 @@ internal static class MySignRequestOptions
 
     /// <summary>Request không idempotent (vd signHash: mỗi lần gửi đẩy một lời nhắc xác nhận tới điện thoại người ký) nên không thử lại khi lỗi tạm thời.</summary>
     public static readonly HttpRequestOptionsKey<bool> NoRetry = new("ViettelConnect.MySign.NoRetry");
+
+    /// <summary>
+    /// Mã tương quan của người gọi gốc. Handler của IHttpClientFactory sống trong scope riêng (dùng chung giữa các lời
+    /// gọi đồng thời) nên phải đọc mã từ request thay vì từ <c>ICorrelationIdAccessor</c> của chúng.
+    /// </summary>
+    public static readonly HttpRequestOptionsKey<string> CorrelationId = new("ViettelConnect.MySign.CorrelationId");
 }

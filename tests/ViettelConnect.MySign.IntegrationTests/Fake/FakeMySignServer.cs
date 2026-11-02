@@ -44,6 +44,9 @@ internal sealed class FakeMySignScenario
     /// <summary>Route tương đối -> HTTP status lỗi (thân rỗng) chỉ trả MỘT lần rồi trở lại bình thường.</summary>
     public ConcurrentDictionary<string, int> FailOnceByRoute { get; } = new();
 
+    /// <summary>Route tương đối -> (HTTP status, số lần còn lại): trả lỗi thân rỗng đúng N lần rồi trở lại bình thường.</summary>
+    public ConcurrentDictionary<string, (int Status, int Remaining)> FailTimesByRoute { get; } = new();
+
     /// <summary>Bật thì signHash đồng bộ trả thiếu chữ ký cuối (số chữ ký != số mã băm).</summary>
     public bool DropLastSignature { get; set; }
 
@@ -156,6 +159,12 @@ internal sealed class FakeMySignServer : IAsyncDisposable
                 if (self._scenario.FailOnceByRoute.TryRemove(route, out var onceStatus))
                 {
                     await Write(ctx, onceStatus, "{}");
+                    return;
+                }
+
+                if (self.TryConsumeFailure(route, out var timesStatus))
+                {
+                    await Write(ctx, timesStatus, string.Empty);
                     return;
                 }
 
@@ -285,6 +294,22 @@ internal sealed class FakeMySignServer : IAsyncDisposable
         }
 
         return b64[..4] + "\r\n" + b64[4..8] + "\r\n" + b64[8..];
+    }
+
+    private bool TryConsumeFailure(string route, out int status)
+    {
+        lock (_lock)
+        {
+            if (_scenario.FailTimesByRoute.TryGetValue(route, out var entry) && entry.Remaining > 0)
+            {
+                _scenario.FailTimesByRoute[route] = (entry.Status, entry.Remaining - 1);
+                status = entry.Status;
+                return true;
+            }
+        }
+
+        status = 0;
+        return false;
     }
 
     private bool BearerIsValid(string? authorization)

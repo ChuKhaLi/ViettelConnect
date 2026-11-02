@@ -6,7 +6,8 @@ namespace ViettelConnect.MySign.Application.UseCases;
 
 /// <summary>
 /// Hỏi requests/status mỗi <c>interval</c> cho tới khi có kết cục hoặc hết <c>totalTimeout</c>.
-/// Trạng thái lạ/rỗng được coi là đang chờ (không bao giờ là thành công, không treo vô hạn).
+/// Trạng thái lạ/rỗng, và lỗi kết nối tạm thời khi hỏi, được coi là đang chờ (không bao giờ là thành công, không treo
+/// vô hạn). Mọi lỗi ném ra sau khi đã có giao dịch đều mang <see cref="MySignException.TransactionId"/>.
 /// </summary>
 internal sealed class PollSignStatus
 {
@@ -23,7 +24,10 @@ internal sealed class PollSignStatus
         _correlation = correlation ?? throw new ArgumentNullException(nameof(correlation));
     }
 
-    /// <summary>Trả danh sách chữ ký thô khi thành công; ném <see cref="MySignException"/> ở mọi kết cục khác.</summary>
+    /// <summary>
+    /// Trả danh sách chữ ký thô khi thành công; ném <see cref="MySignException"/> ở mọi kết cục khác (hết hạn chót:
+    /// <see cref="MySignTimeoutException"/> kèm trạng thái thô cuối cùng nhận được).
+    /// </summary>
     public async Task<IReadOnlyList<byte[]>> ExecuteAsync(
         MySignCredentials who,
         string transactionId,
@@ -33,41 +37,59 @@ internal sealed class PollSignStatus
     {
         var start = _time.GetUtcNow();
         var deadline = start + totalTimeout;
+        string? lastRawStatus = null;
 
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            var snapshot = await _wire.GetStatusAsync(who, transactionId, ct).ConfigureAwait(false);
 
-            switch (snapshot.Status)
+            // Yêu cầu đã gửi tới người ký: lỗi kết nối khi hỏi trạng thái (sau khi handler đã thử lại ngắn) không có nghĩa
+            // là ký thất bại — người ký vẫn có thể xác nhận. Coi như đang chờ tới hạn chót. Huỷ của người gọi vẫn ném ngay.
+            StatusSnapshot? snapshot;
+            try
             {
-                case SignStatus.Succeeded:
-                    return snapshot.Signatures;
+                snapshot = await _wire.GetStatusAsync(who, transactionId, ct).ConfigureAwait(false);
+            }
+            catch (MySignException ex) when (ex.Category == MySignErrorCategory.Transport && !ct.IsCancellationRequested)
+            {
+                snapshot = null;
+            }
 
-                case SignStatus.Rejected:
-                    throw new MySignException(
-                        MySignErrorCategory.SignRejected,
-                        snapshot.RawStatus,
-                        "Người ký đã từ chối yêu cầu ký.",
-                        _correlation.Current);
+            if (snapshot is not null)
+            {
+                lastRawStatus = snapshot.RawStatus ?? lastRawStatus;
+                switch (snapshot.Status)
+                {
+                    case SignStatus.Succeeded:
+                        return snapshot.Signatures;
 
-                case SignStatus.TimedOut:
-                    throw new MySignTimeoutException(
-                        "Yêu cầu ký đã hết hạn chờ người ký xác nhận.",
-                        _correlation.Current,
-                        transactionId,
-                        snapshot.RawStatus);
+                    case SignStatus.Rejected:
+                        throw new MySignException(
+                            MySignErrorCategory.SignRejected,
+                            snapshot.RawStatus,
+                            "Người ký đã từ chối yêu cầu ký.",
+                            _correlation.Current,
+                            transactionId: transactionId);
 
-                case SignStatus.Failed:
-                    throw new MySignException(
-                        FailedCategory(snapshot.RawStatus),
-                        snapshot.RawStatus,
-                        $"Yêu cầu ký thất bại (mã trạng thái {snapshot.RawStatus}).",
-                        _correlation.Current);
+                    case SignStatus.TimedOut:
+                        throw new MySignTimeoutException(
+                            "Yêu cầu ký đã hết hạn chờ người ký xác nhận.",
+                            _correlation.Current,
+                            transactionId,
+                            snapshot.RawStatus);
 
-                case SignStatus.Pending:
-                default:
-                    break;
+                    case SignStatus.Failed:
+                        throw new MySignException(
+                            FailedCategory(snapshot.RawStatus),
+                            snapshot.RawStatus,
+                            $"Yêu cầu ký thất bại (mã trạng thái {snapshot.RawStatus}).",
+                            _correlation.Current,
+                            transactionId: transactionId);
+
+                    case SignStatus.Pending:
+                    default:
+                        break;
+                }
             }
 
             var now = _time.GetUtcNow();
@@ -76,7 +98,8 @@ internal sealed class PollSignStatus
                 throw new MySignTimeoutException(
                     $"Hết thời gian chờ ({totalTimeout}) mà yêu cầu ký chưa có kết quả.",
                     _correlation.Current,
-                    transactionId);
+                    transactionId,
+                    lastRawStatus);
             }
 
             var remaining = deadline - now;

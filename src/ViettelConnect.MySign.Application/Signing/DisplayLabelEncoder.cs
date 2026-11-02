@@ -45,7 +45,7 @@ public static class DisplayLabelEncoder
         var sb = new StringBuilder(value.Length);
         var pendingSpace = false;
 
-        foreach (var ch in value.Normalize(NormalizationForm.FormD))
+        foreach (var ch in StripLoneSurrogates(value).Normalize(NormalizationForm.FormD))
         {
             if (CharUnicodeInfo.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark)
             {
@@ -76,5 +76,32 @@ public static class DisplayLabelEncoder
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// <see cref="string.Normalize(NormalizationForm)"/> ném <see cref="ArgumentException"/> với surrogate lẻ (vd JSON
+    /// "\ud800"); thay chúng bằng khoảng trắng (coi như dấu phân cách) để không bao giờ ném lỗi.
+    /// </summary>
+    private static string StripLoneSurrogates(string value)
+    {
+        StringBuilder? sb = null;
+        for (var i = 0; i < value.Length; i++)
+        {
+            var ch = value[i];
+            var paired = char.IsHighSurrogate(ch)
+                ? i + 1 < value.Length && char.IsLowSurrogate(value[i + 1])
+                : !char.IsLowSurrogate(ch) || (i > 0 && char.IsHighSurrogate(value[i - 1]));
+
+            if (paired)
+            {
+                sb?.Append(ch);
+                continue;
+            }
+
+            sb ??= new StringBuilder(value, 0, i, value.Length);
+            sb.Append(' ');
+        }
+
+        return sb?.ToString() ?? value;
     }
 }

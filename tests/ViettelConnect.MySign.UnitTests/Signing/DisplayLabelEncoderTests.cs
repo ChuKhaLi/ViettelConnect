@@ -23,6 +23,24 @@ public sealed class DisplayLabelEncoderTests
     public void Encode_normalizes(string? label, string fallback, string expected)
         => Assert.Equal(expected, Decode(DisplayLabelEncoder.Encode(label, fallback)));
 
+    // Không dùng InlineData: chuỗi trong attribute được lưu dạng UTF-8 nên surrogate lẻ bị thay bằng U+FFFD.
+    public static TheoryData<string, string, string> LoneSurrogates => new()
+    {
+        { "\ud800abc", "doc", "abc" },
+        { "\udc00", "doc", "doc" },
+        { "\udc00", "\ud800", "Document" },
+        { "a\udc00\ud800b", "doc", "a b" },
+        { "x\U0001F600y", "doc", "x y" },
+    };
+
+    [Theory]
+    [MemberData(nameof(LoneSurrogates))]
+    public void Encode_lone_surrogates_do_not_throw(string label, string fallback, string expected)
+    {
+        Assert.Contains(label, char.IsSurrogate);
+        Assert.Equal(expected, Decode(DisplayLabelEncoder.Encode(label, fallback)));
+    }
+
     [Fact]
     public void Encode_long_vietnamese_label_stays_under_100_and_valid()
     {

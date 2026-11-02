@@ -91,6 +91,47 @@ public class CallbackFakeServerTests
             });
     }
 
+    private sealed class FailingPendingStore : IPendingSignatureStore
+    {
+        public ValueTask SaveAsync(PendingSignature p, CancellationToken ct) => throw new InvalidOperationException("store down");
+
+        public ValueTask<PendingSignature?> FindAsync(string tenantKey, string transactionId, CancellationToken ct) =>
+            ValueTask.FromResult<PendingSignature?>(null);
+
+        public ValueTask<bool> TryRemoveAsync(string tenantKey, string transactionId, CancellationToken ct) =>
+            ValueTask.FromResult(false);
+    }
+
+    [Fact]
+    public async Task Begin_store_failure_after_submission_carries_transaction_id()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        foreach (var cert in fake.Scenario.Certificates)
+        {
+            cert.ValidTo = "20301231000000Z";
+        }
+
+        var pipeline = TestPipeline.Create(fake.BaseUrl);
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero));
+        var corr = new FixedCorrelation();
+        var begin = new BeginSignHashes(
+            pipeline.Wire,
+            new FixedCredentials(),
+            new FirstUsableCertificateSelector(time, corr),
+            new MobileConfirmationAuthorizationProvider(),
+            corr,
+            new FailingPendingStore(),
+            time);
+
+        var ex = await Assert.ThrowsAsync<MySignException>(
+            () => begin.ExecuteAsync(new SignHashesRequest([Doc("a")], null, null), "labA", CancellationToken.None));
+
+        Assert.Equal("tx-1", ex.TransactionId);
+        Assert.Equal("corr-test", ex.CorrelationId);
+        Assert.DoesNotContain("store down", ex.Detail);
+        Assert.IsType<InvalidOperationException>(ex.InnerException);
+    }
+
     private static HashDocument Doc(string id) =>
         new(id, "Biên bản", SHA256.HashData(Encoding.UTF8.GetBytes(id)));
 
