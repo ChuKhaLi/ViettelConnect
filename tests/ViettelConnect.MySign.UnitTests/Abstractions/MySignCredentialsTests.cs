@@ -18,10 +18,36 @@ public sealed class MySignCredentialsTests
     }
 
     [Fact]
-    public void CacheKey_combines_client_profile_and_user()
-        => Assert.Equal("client-abc|profile-xyz|user-123", Creds.CacheKey);
+    public void CacheKey_is_a_stable_sha256_hex_hash()
+    {
+        Assert.Matches("^[0-9a-f]{64}$", Creds.CacheKey);
+        Assert.Equal(Creds.CacheKey, new MySignCredentials("client-abc", "other-secret", "profile-xyz", "user-123").CacheKey);
+    }
+
+    [Fact]
+    public void CacheKey_contains_no_signer_or_client_identifier()
+    {
+        var key = Creds.CacheKey;
+        Assert.DoesNotContain("profile-xyz", key, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("user-123", key, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("client-abc", key, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("s3cr3t-value", key, StringComparison.OrdinalIgnoreCase);
+    }
 
     [Fact]
     public void CacheKey_differs_per_tenant()
         => Assert.NotEqual(Creds.CacheKey, (Creds with { ClientId = "client-other" }).CacheKey);
+
+    [Fact]
+    public void CacheKey_differs_per_signer()
+    {
+        Assert.NotEqual(Creds.CacheKey, (Creds with { ProfileId = "profile-other" }).CacheKey);
+        Assert.NotEqual(Creds.CacheKey, (Creds with { UserId = "user-other" }).CacheKey);
+    }
+
+    [Fact]
+    public void CacheKey_is_not_ambiguous_when_ids_contain_the_separator()
+        => Assert.NotEqual(
+            new MySignCredentials("a|b", "s", "c", "d").CacheKey,
+            new MySignCredentials("a", "s", "b|c", "d").CacheKey);
 }

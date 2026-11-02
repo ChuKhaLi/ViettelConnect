@@ -1,6 +1,9 @@
+using System.Collections.Concurrent;
 using System.Net;
+using Microsoft.Extensions.Logging;
 using ViettelConnect.MySign.Application.Abstractions;
 using ViettelConnect.MySign.Domain.Errors;
+using ViettelConnect.MySign.Infrastructure.Http;
 using ViettelConnect.MySign.IntegrationTests.Fake;
 using Xunit;
 
@@ -157,5 +160,79 @@ public class RefreshOn401Tests
             () => pipeline.Wire.LoginAsync(Creds, cts.Token));
 
         Assert.Equal(0, terminal.Calls);
+    }
+
+    private sealed class CapturingLogger : ILogger<MySignAuthHandler>
+    {
+        public ConcurrentQueue<(LogLevel Level, string Text)> Lines { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Lines.Enqueue((logLevel, formatter(state, exception)));
+    }
+
+    [Fact]
+    public async Task A_401_caller_that_joins_a_flight_returning_the_stale_token_refreshes_once_more()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.RequireBearer = true;
+        var pipeline = TestPipeline.Create(fake.BaseUrl);
+
+        await pipeline.Wire.GetCertificatesAsync(Creds, CancellationToken.None);
+        var stale = await pipeline.Cache.TryGetAsync(Creds.CacheKey, CancellationToken.None);
+        Assert.NotNull(stale);
+        fake.RevokeIssuedTokens();
+
+        // Một lượt single-flight khác (vd người gọi thấy cache cũ rồi đọc lại đúng token cũ) đang chạy và sẽ trả token cũ.
+        var gate = new TaskCompletionSource<AccessToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var other = pipeline.SingleFlight.RefreshAsync(Creds.CacheKey, _ => gate.Task, CancellationToken.None);
+
+        var call = pipeline.Wire.GetCertificatesAsync(Creds, CancellationToken.None);
+        while (fake.RequestsFor("certificates/info").Count < 2)
+        {
+            await Task.Delay(10);
+        }
+
+        // Cho người gọi 401 kịp nhập vào lượt đang chạy rồi mới mở cổng.
+        await Task.Delay(200);
+        gate.SetResult(stale!);
+        await other;
+
+        var certs = await call;
+
+        Assert.NotEmpty(certs);
+        Assert.Equal(2, fake.LoginCount);
+        Assert.Equal(3, fake.RequestsFor("certificates/info").Count);
+    }
+
+    [Fact]
+    public async Task Token_with_lifetime_shorter_than_the_expiry_margin_is_still_reused()
+    {
+        await using var fake = await FakeMySignServer.StartAsync();
+        fake.Scenario.ExpiresIn = "30";
+        var logger = new CapturingLogger();
+        var pipeline = TestPipeline.Create(fake.BaseUrl, authLogger: logger);
+        var creds = Creds with { UserId = "user-short-lifetime-" + Guid.NewGuid().ToString("N") };
+
+        await pipeline.Wire.GetCertificatesAsync(creds, CancellationToken.None);
+        pipeline.Time.Advance(TimeSpan.FromSeconds(10));
+        await pipeline.Wire.GetCertificatesAsync(creds, CancellationToken.None);
+
+        Assert.Equal(1, fake.LoginCount);
+
+        // Biên rút gọn = nửa thời hạn (15s): quá đó thì đăng nhập lại, và cảnh báo chỉ ghi một lần cho mỗi khoá.
+        pipeline.Time.Advance(TimeSpan.FromSeconds(6));
+        await pipeline.Wire.GetCertificatesAsync(creds, CancellationToken.None);
+        Assert.Equal(2, fake.LoginCount);
+
+        var warnings = logger.Lines.Where(l => l.Level == LogLevel.Warning).ToArray();
+        var warning = Assert.Single(warnings);
+        Assert.DoesNotContain(fake.TokenIssuedFor(creds.ClientId), warning.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("fake-token", warning.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(creds.UserId, warning.Text, StringComparison.Ordinal);
     }
 }

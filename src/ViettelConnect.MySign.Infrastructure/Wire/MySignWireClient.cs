@@ -74,7 +74,8 @@ internal sealed class MySignWireClient : IMySignWireClient
             throw ErrorMapper.Protocol(op, "expires_in missing or invalid", CorrelationId);
         }
 
-        return new AccessToken(dto.AccessToken, _time.GetUtcNow().AddSeconds(seconds));
+        var now = _time.GetUtcNow();
+        return new AccessToken(dto.AccessToken, now.AddSeconds(seconds)) { IssuedAtUtc = now };
     }
 
     public async Task<IReadOnlyList<Certificate>> GetCertificatesAsync(MySignCredentials c, CancellationToken ct)

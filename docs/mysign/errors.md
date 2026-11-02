@@ -10,8 +10,8 @@ nav_order: 4
 Lỗi nghiệp vụ / giao thức ném `MySignException`. Thuộc tính: `Category`, `RawCode` (mã Viettel nếu có), `Detail`, `CorrelationId`, `TransactionId`.
 
 - **Hết giờ chờ người ký** luôn là `MySignTimeoutException` (lớp con, `Category = SignTimeout`) ở mọi chế độ của `SignHashesAsync`: đồng bộ (Viettel trả mã 58061), hỏi trạng thái (trạng thái 4001 hoặc hết `Polling:TotalTimeout`). Bắt `MySignTimeoutException` trước `MySignException`.
-- **`TransactionId`** có giá trị khi lỗi xảy ra *sau* khi Viettel đã nhận yêu cầu ký (người ký có thể đã thấy lời nhắc): từ chối, ký thất bại, vi phạm giao thức, hết giờ khi hỏi trạng thái, hoặc không lưu được giao dịch chờ callback. Dùng để đối soát; null nếu lỗi xảy ra trước khi gửi.
-- **`CorrelationId`** là mã của lời gọi gây lỗi, kể cả lỗi do pipeline HTTP ném (thử lại hết lượt, 401 lần hai, đăng nhập lại) khi nhiều lời gọi chạy song song.
+- **`TransactionId`** có giá trị khi lỗi xảy ra *sau* khi Viettel đã nhận yêu cầu ký (người ký có thể đã thấy lời nhắc): từ chối, ký thất bại, vi phạm giao thức, hết giờ khi hỏi trạng thái, lỗi Viettel trả về ở chính lời gọi hỏi trạng thái (vd chữ ký không phải base64, mã 58061 — vẫn là `MySignTimeoutException`), hoặc không lưu được giao dịch chờ callback. Dùng để đối soát; null nếu lỗi xảy ra trước khi gửi.
+- **`CorrelationId`** là mã của lời gọi gây lỗi, kể cả lỗi do pipeline HTTP ném (thử lại hết lượt, 401 lần hai, đăng nhập lại) khi nhiều lời gọi chạy song song. Riêng lỗi của lượt đăng nhập dùng chung (single-flight) giữa các lời gọi cùng đơn vị + người ký mang mã của lời gọi khởi phát lượt đăng nhập đó. Nếu `ICorrelationIdAccessor` của ứng dụng trả chuỗi rỗng, lỗi vẫn được ném đúng loại với một GUID mới (dạng "N") thay vì `ArgumentException`.
 
 Mã lỗi Viettel trong thân phản hồi được ưu tiên hơn mã HTTP: ví dụ `signHash` trả HTTP 500 kèm `{"error":"58083"}` là `SignFailed`, không phải `Transport`.
 
