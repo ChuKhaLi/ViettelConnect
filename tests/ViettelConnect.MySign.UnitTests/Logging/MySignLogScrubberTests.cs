@@ -139,4 +139,27 @@ public class MySignLogScrubberTests
 
         Assert.Equal(text, MySignLogScrubber.Scrub(text));
     }
+
+    [Theory]
+    [InlineData("client_secret=s3cr3t", "s3cr3t")]
+    [InlineData("access_token=abcsXYZ", "abcsXYZ")]
+    [InlineData("token=Sabc.def.ghi", "Sabc.def.ghi")]
+    [InlineData("refresh_token=ssssss", "ssssss")]
+    [InlineData("SAD=Qm9v", "Qm9v")]
+    [InlineData("token=abc_sdef-ghs", "abc_sdef-ghs")]
+    public void Key_value_secrets_containing_the_letter_s_are_fully_masked(string pair, string secret)
+    {
+        var output = MySignLogScrubber.Scrub($"a=1&{pair}&b=2 tail");
+
+        Assert.DoesNotContain(secret, output);
+        Assert.Equal($"a=1&{pair[..pair.IndexOf('=')]}={MySignLogScrubber.Mask}&b=2 tail", output);
+    }
+
+    [Fact]
+    public void Key_value_secret_stops_at_whitespace()
+    {
+        var output = MySignLogScrubber.Scrub("client_secret=s3cr3t next=ok");
+
+        Assert.Equal($"client_secret={MySignLogScrubber.Mask} next=ok", output);
+    }
 }

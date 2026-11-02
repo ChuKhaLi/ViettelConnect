@@ -36,7 +36,7 @@ internal static class MySignLogScrubber
 
     // name=value (form-encoded / query string): che mọi giá trị, kể cả chuỗi hex ngắn mà luật base64 bên dưới để lại.
     private static readonly Regex SensitiveKeyValue = new(
-        @"(?<![A-Za-z0-9_])(?<name>client_secret|access_token|refresh_token|token|sad)=(?<value>[^&s"",;]+)",
+        @"(?<![A-Za-z0-9_])(?<name>client_secret|access_token|refresh_token|token|sad)=(?<value>[^&\s"",;]+)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex Base64Chunk = new(
