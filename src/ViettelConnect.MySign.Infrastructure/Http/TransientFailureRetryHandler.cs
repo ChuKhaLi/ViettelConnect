@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using ViettelConnect.MySign.Application.Abstractions;
 using ViettelConnect.MySign.Domain.Errors;
 using ViettelConnect.MySign.Infrastructure.Configuration;
+using ViettelConnect.MySign.Infrastructure.Wire;
 
 namespace ViettelConnect.MySign.Infrastructure.Http;
 
@@ -48,7 +49,10 @@ internal sealed class TransientFailureRetryHandler : DelegatingHandler
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var retry = _options.Value.TransportRetry;
-        var maxAttempts = Math.Max(1, retry.MaxAttempts);
+        // Request không idempotent (signHash) chỉ gửi đúng một lần.
+        var maxAttempts = request.Options.TryGetValue(MySignRequestOptions.NoRetry, out var noRetry) && noRetry
+            ? 1
+            : Math.Max(1, retry.MaxAttempts);
         var baseDelayMs = (int)retry.BaseDelay.TotalMilliseconds;
         var maxDelayMs = (int)retry.MaxDelay.TotalMilliseconds;
         var body = await RequestCloner.BufferContentAsync(request, cancellationToken).ConfigureAwait(false);

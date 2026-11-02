@@ -59,7 +59,7 @@ internal sealed class MySignWireClient : IMySignWireClient
             UserId = c.UserId,
         };
 
-        var dto = await PostAsync<LoginRequestDto, LoginResponseDto>(MySignRoutes.Login, op, c, body, skipAuth: true, ct);
+        var dto = await PostAsync<LoginRequestDto, LoginResponseDto>(MySignRoutes.Login, op, c, body, skipAuth: true, noRetry: false, ct);
         if (string.IsNullOrWhiteSpace(dto.AccessToken))
         {
             throw ErrorMapper.Protocol(op, "access_token missing", _correlation.Current);
@@ -85,7 +85,7 @@ internal sealed class MySignWireClient : IMySignWireClient
         };
 
         var dtos = await PostAsync<CertificateInfoRequestDto, List<CertificateInfoDto>>(
-            MySignRoutes.CertificatesInfo, op, c, body, skipAuth: false, ct);
+            MySignRoutes.CertificatesInfo, op, c, body, skipAuth: false, noRetry: false, ct);
 
         try
         {
@@ -117,7 +117,7 @@ internal sealed class MySignWireClient : IMySignWireClient
             Sad = r.Sad,
         };
 
-        var dto = await PostAsync<SignHashRequestDto, SignHashResponseDto>(MySignRoutes.SignHash, op, c, body, skipAuth: false, ct);
+        var dto = await PostAsync<SignHashRequestDto, SignHashResponseDto>(MySignRoutes.SignHash, op, c, body, skipAuth: false, noRetry: true, ct);
         if (dto.Signatures is null && string.IsNullOrWhiteSpace(dto.TransactionId))
         {
             throw ErrorMapper.Protocol(op, "neither signatures nor transactionId", _correlation.Current);
@@ -134,7 +134,7 @@ internal sealed class MySignWireClient : IMySignWireClient
         var body = new RequestStatusRequestDto { TransactionId = transactionId };
 
         var dto = await PostAsync<RequestStatusRequestDto, RequestStatusResponseDto>(
-            MySignRoutes.RequestStatus, op, c, body, skipAuth: false, ct);
+            MySignRoutes.RequestStatus, op, c, body, skipAuth: false, noRetry: false, ct);
 
         var raw = string.IsNullOrWhiteSpace(dto.Status) ? null : dto.Status.Trim();
         var signatures = dto.Signatures is null ? [] : DecodeSignatures(dto.Signatures, op);
@@ -164,6 +164,7 @@ internal sealed class MySignWireClient : IMySignWireClient
         MySignCredentials credentials,
         TRequest body,
         bool skipAuth,
+        bool noRetry,
         CancellationToken ct)
         where TResponse : class
     {
@@ -177,6 +178,7 @@ internal sealed class MySignWireClient : IMySignWireClient
         request.Headers.Accept.ParseAdd("application/json");
         request.Options.Set(MySignRequestOptions.Credentials, credentials);
         request.Options.Set(MySignRequestOptions.SkipAuth, skipAuth);
+        request.Options.Set(MySignRequestOptions.NoRetry, noRetry);
 
         HttpResponseMessage response;
         string text;

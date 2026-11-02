@@ -41,6 +41,12 @@ internal sealed class FakeMySignScenario
     /// <summary>Lỗi cố định theo route tương đối (vd "signHash"): HTTP status + thân thô.</summary>
     public ConcurrentDictionary<string, (int Status, string Body)> ErrorByRoute { get; } = new();
 
+    /// <summary>Route tương đối -> HTTP status lỗi (thân rỗng) chỉ trả MỘT lần rồi trở lại bình thường.</summary>
+    public ConcurrentDictionary<string, int> FailOnceByRoute { get; } = new();
+
+    /// <summary>Bật thì signHash đồng bộ trả thiếu chữ ký cuối (số chữ ký != số mã băm).</summary>
+    public bool DropLastSignature { get; set; }
+
     /// <summary>Chuỗi status lần lượt cho mỗi transactionId; phần tử cuối được lặp lại.</summary>
     public ConcurrentDictionary<string, List<string>> StatusSequence { get; } = new();
 
@@ -144,6 +150,12 @@ internal sealed class FakeMySignServer : IAsyncDisposable
                     return;
                 }
 
+                if (self._scenario.FailOnceByRoute.TryRemove(route, out var onceStatus))
+                {
+                    await Write(ctx, onceStatus, "{}");
+                    return;
+                }
+
                 if (self._scenario.RequireBearer && route != "ras/v1/login" && !self.BearerIsValid(auth))
                 {
                     await Write(ctx, 401, "{\"error\":\"59033\",\"error_description\":\"Failed to process request - invalid token\"}");
@@ -214,7 +226,8 @@ internal sealed class FakeMySignServer : IAsyncDisposable
             var asyncCode = doc.RootElement.GetProperty("async").GetInt32();
             if (asyncCode == 0)
             {
-                var sigs = hashes.Select(h => self!.EncodeSignature(SignatureFor(h))).ToArray();
+                var signed = self!._scenario.DropLastSignature ? hashes.Take(hashes.Count - 1) : hashes;
+                var sigs = signed.Select(h => self.EncodeSignature(SignatureFor(h))).ToArray();
                 await Write(ctx, 200, JsonSerializer.Serialize(new { signatures = sigs }));
                 return;
             }
