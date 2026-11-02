@@ -30,6 +30,8 @@ var result = await client.SignHashesAsync(new SignHashesRequestDto(
 
 Bí mật đọc từ user-secrets hoặc biến môi trường, không ghi vào file. Xem [bắt đầu](docs/mysign/getting-started.md), `samples/ViettelConnect.MySign.Sample.Console` (liệt kê chứng thư, ký mã băm một file) và `samples/ViettelConnect.MySign.Sample.Api` (hai endpoint callback).
 
+> **Sample API chỉ để demo:** endpoint `POST /viettel/sign` của `Sample.Api` **không có xác thực** — ai gọi được nó đều đẩy được lời nhắc ký lên điện thoại người ký đã cấu hình. Ứng dụng thật phải bảo vệ endpoint khởi tạo ký (xác thực, kiểm tra người dùng đúng là người ký, chống lạm dụng). Sample trả 400 cho lỗi `Validation` (đầu vào của người gọi), 502 cho các lỗi MySign khác.
+
 ## Cấu trúc
 
 ```

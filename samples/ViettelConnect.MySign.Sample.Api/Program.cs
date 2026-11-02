@@ -3,6 +3,10 @@
 //   POST /viettel/sign                 {"documentName": "...", "sha256Base64": "..."} -> bắt đầu ký, trả transactionId
 //   GET|POST /viettel/callback/token   Viettel gọi để lấy token callback
 //   GET|POST /viettel/callback/result  Viettel gọi để báo kết quả ký
+//
+// !!! CHỈ ĐỂ DEMO: /viettel/sign KHÔNG có xác thực/phân quyền — ai gọi được endpoint này đều đẩy được lời nhắc ký lên
+// điện thoại của người ký đã cấu hình. Ứng dụng thật phải bảo vệ nó (RequireAuthorization, kiểm tra người dùng hiện tại
+// đúng là người ký, chống lạm dụng). Hai endpoint callback do Viettel gọi và đã tự xác thực bằng client/token callback.
 using System.Text;
 using ViettelConnect.MySign.Client;
 using ViettelConnect.MySign.Client.DependencyInjection;
@@ -14,6 +18,7 @@ builder.Services.AddViettelMySign(builder.Configuration);
 
 var app = builder.Build();
 
+// DEMO ONLY — không xác thực. Ứng dụng thật: .RequireAuthorization() và kiểm tra quyền ký của người dùng.
 app.MapPost("/viettel/sign", async (SignRequest body, IViettelMySignClient client, CancellationToken ct) =>
 {
     try
@@ -30,6 +35,11 @@ app.MapPost("/viettel/sign", async (SignRequest body, IViettelMySignClient clien
     catch (ArgumentException ex)
     {
         return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (MySignException ex) when (ex.Category == MySignErrorCategory.Validation)
+    {
+        // Lỗi đầu vào của chính người gọi (vd mã băm không đủ 32 byte): 400, không phải lỗi của Viettel.
+        return Results.BadRequest(new { error = ex.Detail });
     }
     catch (MySignException ex)
     {
