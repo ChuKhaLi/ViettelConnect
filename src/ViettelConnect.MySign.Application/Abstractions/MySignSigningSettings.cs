@@ -10,10 +10,4 @@ internal sealed record MySignSigningSettings(
     SignMode SignMode,
     int PollingAsyncCode,
     TimeSpan PollingInterval,
-    TimeSpan PollingTotalTimeout)
-{
-    public MySignSigningSettings(SignMode signMode)
-        : this(signMode, 2, TimeSpan.FromSeconds(3), TimeSpan.FromMinutes(5))
-    {
-    }
-}
+    TimeSpan PollingTotalTimeout);

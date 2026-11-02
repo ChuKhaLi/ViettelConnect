@@ -60,4 +60,11 @@ public sealed class AdvancedOptions
     /// mặc định 2, chưa kiểm chứng với MySign thật.
     /// </summary>
     public int PollingAsyncCode { get; set; } = 2;
+
+    /// <summary>
+    /// Thời gian chờ tối đa của một lời gọi HTTP tới MySign (gồm cả các lần thử lại bên trong). Ở chế độ đồng bộ,
+    /// signHash chờ người ký bấm xác nhận trên điện thoại nên phải đủ dài. Để trống (mặc định) =
+    /// <c>Polling.TotalTimeout</c> + 1 phút (6 phút với mặc định). Không bao giờ vô hạn.
+    /// </summary>
+    public TimeSpan? HttpTimeout { get; set; }
 }

@@ -125,6 +125,49 @@ public sealed class MySignOptionsValidatorTests
         Assert.True(r.Failures!.Count() >= 5);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Polling_interval_must_be_positive(int seconds)
+    {
+        var o = Valid();
+        o.Polling.Interval = TimeSpan.FromSeconds(seconds);
+        var r = Run(o);
+        Assert.False(r.Succeeded);
+        Assert.Contains(r.Failures!, f => f.Contains("Polling:Interval must be > 0"));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Polling_total_timeout_must_be_positive(int seconds)
+    {
+        var o = Valid();
+        o.Polling.TotalTimeout = TimeSpan.FromSeconds(seconds);
+        var r = Run(o);
+        Assert.False(r.Succeeded);
+        Assert.Contains(r.Failures!, f => f.Contains("Polling:TotalTimeout"));
+    }
+
+    [Fact]
+    public void Http_timeout_is_optional_but_must_be_positive_and_finite_when_set()
+    {
+        var o = Valid();
+        Assert.Null(o.Advanced.HttpTimeout);
+        Assert.True(Run(o).Succeeded);
+
+        o.Advanced.HttpTimeout = TimeSpan.FromMinutes(2);
+        Assert.True(Run(o).Succeeded);
+
+        foreach (var bad in new[] { TimeSpan.Zero, TimeSpan.FromSeconds(-1), Timeout.InfiniteTimeSpan })
+        {
+            o.Advanced.HttpTimeout = bad;
+            var r = Run(o);
+            Assert.False(r.Succeeded);
+            Assert.Contains(r.Failures!, f => f.Contains("Advanced:HttpTimeout"));
+        }
+    }
+
     [Fact]
     public void Undefined_SignMode_or_CredentialsMode_fails()
     {

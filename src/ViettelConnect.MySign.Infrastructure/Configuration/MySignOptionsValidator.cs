@@ -3,7 +3,7 @@ using ViettelConnect.MySign.Domain.Signing;
 
 namespace ViettelConnect.MySign.Infrastructure.Configuration;
 
-public sealed class MySignOptionsValidator : IValidateOptions<MySignOptions>
+internal sealed class MySignOptionsValidator : IValidateOptions<MySignOptions>
 {
     public ValidateOptionsResult Validate(string? name, MySignOptions options)
     {
@@ -65,6 +65,11 @@ public sealed class MySignOptionsValidator : IValidateOptions<MySignOptions>
         if (options.Advanced.PollingAsyncCode is not (1 or 2))
         {
             errors.Add($"{s}:Advanced:PollingAsyncCode must be 1 or 2.");
+        }
+        // Timeout.InfiniteTimeSpan (-1 ms) cũng bị loại: HttpClient không bao giờ được chờ vô hạn.
+        if (options.Advanced.HttpTimeout is { } httpTimeout && httpTimeout <= TimeSpan.Zero)
+        {
+            errors.Add($"{s}:Advanced:HttpTimeout must be > 0 (leave empty for Polling:TotalTimeout + 1 minute).");
         }
 
         return errors.Count == 0

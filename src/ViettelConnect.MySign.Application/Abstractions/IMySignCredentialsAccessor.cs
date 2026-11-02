@@ -7,8 +7,9 @@ namespace ViettelConnect.MySign.Application.Abstractions;
 /// </summary>
 /// <remarks>
 /// Phải đăng ký singleton và đọc trạng thái ambient/options bên trong <see cref="Get"/>; không cache
-/// kết quả, không scoped. Muốn thay mặc định, đăng ký TRƯỚC khi gọi hàm đăng ký của SDK
-/// (SDK dùng <c>TryAddSingleton</c>). SDK không bao giờ ghi log giá trị trả về.
+/// kết quả, không scoped. Muốn thay mặc định, đăng ký trước hoặc sau khi gọi hàm đăng ký của SDK
+/// (SDK dùng <c>TryAddSingleton</c>; đăng ký sau cùng thắng). Bắt buộc khi <c>CredentialsMode = Dynamic</c>.
+/// SDK không bao giờ ghi log giá trị trả về.
 /// </remarks>
 public interface IMySignCredentialsAccessor
 {

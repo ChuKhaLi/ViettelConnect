@@ -50,7 +50,7 @@ public class SignSynchronousFakeServerTests
             new MobileConfirmationAuthorizationProvider(),
             corr,
             new PollSignStatus(pipeline.Wire, new NoDelay(), time, corr),
-            new MySignSigningSettings(SignMode.Synchronous));
+            new MySignSigningSettings(SignMode.Synchronous, 2, TimeSpan.FromSeconds(3), TimeSpan.FromMinutes(5)));
         var list = new ListCertificates(pipeline.Wire, new FixedCredentials());
         return (sign, list);
     }
