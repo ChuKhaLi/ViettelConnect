@@ -4,8 +4,7 @@
       "Bash(dotnet build *)",
       "Bash(dotnet test *)",
       "Bash(dotnet format *)",
-      "Bash(dotnet restore *)",
-      "Bash(pdftotext *)"
+      "Bash(pdftotext -enc UTF-8 * .local/viettel-docs/*)"
     ],
     "deny": [
       "Bash(dotnet nuget push *)",
