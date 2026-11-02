@@ -53,4 +53,60 @@ public class MySignLogScrubberTests
         Assert.Equal(
             "MySign login failed (HTTP 401, code 59033).",
             MySignLogScrubber.Scrub("MySign login failed (HTTP 401, code 59033)."));
+
+    [Theory]
+    [InlineData("{\"client_secret\":\"ab\\\"cd-tail\"}", "cd-tail")]
+    [InlineData("{\"access_token\":\"x\\\\\\\"leak-me\",\"y\":1}", "leak-me")]
+    [InlineData("{\"signatures\":[\"a]b\",\"after-bracket\"]}", "after-bracket")]
+    public void Escaped_quotes_inside_sensitive_strings_do_not_leak_the_tail(string input, string secret)
+    {
+        var output = MySignLogScrubber.Scrub(input);
+
+        Assert.DoesNotContain(secret, output);
+        Assert.Contains("<redacted>", output);
+    }
+
+    [Theory]
+    [InlineData("{\"user_id\":123456789,\"x\":1}", "123456789")]
+    [InlineData("{\"profile_id\": -42.5e3}", "-42.5e3")]
+    [InlineData("{\"sad\":true}", "true")]
+    [InlineData("{\"token\":null}", "null")]
+    public void Unquoted_scalar_values_of_sensitive_keys_are_redacted(string input, string secret)
+    {
+        var output = MySignLogScrubber.Scrub(input);
+
+        Assert.DoesNotContain(secret, output);
+        Assert.Contains("<redacted>", output);
+    }
+
+    [Fact]
+    public void Non_sensitive_keys_keep_their_scalar_values()
+        => Assert.Equal("{\"num_signatures\":2,\"async\":0}", MySignLogScrubber.Scrub("{\"num_signatures\":2,\"async\":0}"));
+
+    [Fact]
+    public void Guid_n_and_32_hex_identifiers_survive_the_base64_rule()
+    {
+        var guid = Guid.NewGuid().ToString("N");
+        const string upperHex = "0123456789ABCDEF0123456789ABCDEF";
+
+        var output = MySignLogScrubber.Scrub($"correlationId={guid} transactionId={upperHex}");
+
+        Assert.Contains(guid, output);
+        Assert.Contains(upperHex, output);
+    }
+
+    [Fact]
+    public void Real_base64_signatures_and_tokens_are_still_redacted()
+    {
+        var shortB64 = Convert.ToBase64String(Enumerable.Range(0, 24).Select(i => (byte)(i * 37 + 11)).ToArray());
+        var signature = Convert.ToBase64String(Enumerable.Range(0, 256).Select(i => (byte)(i * 7 + 3)).ToArray());
+        const string hex40 = "205640fd6ea8c7d80bb91c630b52d286d21ee511";
+        Assert.Equal(32, shortB64.Length);
+
+        var output = MySignLogScrubber.Scrub($"a {shortB64} b {signature} c {hex40}");
+
+        Assert.DoesNotContain(shortB64, output);
+        Assert.DoesNotContain(signature, output);
+        Assert.DoesNotContain(hex40, output);
+    }
 }

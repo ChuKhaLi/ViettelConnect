@@ -62,7 +62,11 @@ internal sealed class TransientFailureRetryHandler : DelegatingHandler
 
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                lastResponse?.Dispose();
+                cancellationToken.ThrowIfCancellationRequested();
+            }
 
             try
             {
@@ -97,8 +101,17 @@ internal sealed class TransientFailureRetryHandler : DelegatingHandler
                 break;
             }
 
-            var delayMs = ComputeBackoffMs(attempt, baseDelayMs, maxDelayMs, lastResponse);
-            await _delayer.DelayAsync(TimeSpan.FromMilliseconds(delayMs), cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var delayMs = ComputeBackoffMs(attempt, baseDelayMs, maxDelayMs, lastResponse);
+                await _delayer.DelayAsync(TimeSpan.FromMilliseconds(delayMs), cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Huỷ (hoặc lỗi bất kỳ) trong lúc chờ lùi: phản hồi 5xx/429 đang giữ sẽ không bao giờ được trả, phải giải phóng.
+                lastResponse?.Dispose();
+                throw;
+            }
         }
 
         // Lần thử cuối vẫn 5xx/429: trả nguyên phản hồi để wire client phân loại theo mã lỗi Viettel trong thân
