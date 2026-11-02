@@ -1,0 +1,5 @@
+# Khớp .editorconfig (end_of_line = lf): giữ LF khi checkout trên Windows (core.autocrlf=true)
+* text=auto eol=lf
+*.png binary
+*.pdf binary
+*.snk binary
