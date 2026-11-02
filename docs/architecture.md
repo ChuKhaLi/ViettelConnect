@@ -17,7 +17,14 @@ Bộ khung chép từ `MisaConnect.ESign` (cùng tác giả): bốn lớp, phụ
 
 ## Chuỗi HTTP
 
-Retry lỗi tạm thời, rồi gắn Bearer (token cache có single-flight refresh, khoá theo `client_id` + người ký nên hai lab chạy song song không dùng nhầm token), rồi header, rồi log gọi (che bí mật). `signHash` **không** retry lỗi mạng/5xx vì mỗi lần gọi làm điện thoại người ký hiện yêu cầu.
+`MySignCallLogger` bọc wire client (decorator, nằm ngoài `HttpClient`): ghi log mỗi lời gọi theo endpoint, thời gian, kết quả, nhóm lỗi — không ghi tham số, bí mật hay chữ ký.
+
+Bên trong `HttpClient`, thứ tự handler là: `TransientFailureRetryHandler` (ngoài) → `MySignAuthHandler` (trong) → mạng.
+
+- `TransientFailureRetryHandler`: thử lại có giới hạn (lùi mũ + jitter) với 5xx, 429, lỗi mạng, hết giờ. Lần thử cuối mà vẫn 5xx/429 thì trả phản hồi đó cho wire client để phân loại theo mã lỗi Viettel trong thân (không có mã thì là `Transport`). `signHash` **không** retry lỗi mạng/5xx vì mỗi lần gọi làm điện thoại người ký hiện yêu cầu.
+- `MySignAuthHandler`: gắn Bearer (token cache có single-flight refresh, khoá theo `client_id` + người ký nên hai lab chạy song song không dùng nhầm token); gặp 401 thì đăng nhập lại đúng một lần rồi gửi lại.
+
+Mã tương quan (correlation id) của người gọi đi kèm từng request (`HttpRequestMessage.Options`), nên lỗi do handler ném luôn mang đúng mã của lời gọi gốc kể cả khi nhiều lời gọi chạy song song.
 
 ## Cổng thay được
 

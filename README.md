@@ -69,7 +69,7 @@ Khi xin tài khoản tích hợp:
 
 Các điểm mở phát hiện trong lúc cài đặt:
 
-8. Tên trường `SAD` trong request `signHash` không có trong các bảng tham số của tài liệu (chỉ suy ra từ mã lỗi 58066, 58067, 58093). Tên trường chính xác là gì, khi nào bắt buộc?
+8. Tên trường `SAD` trong request `signHash` không có trong các bảng tham số của tài liệu (chỉ suy ra từ các mã lỗi 58064, 58065, 58089 nói về SAD). Tên trường chính xác là gì, khi nào bắt buộc?
 9. `document_id`: bảng tham số ghi kiểu String nhưng ví dụ mẫu lại là số. Viettel chấp nhận kiểu nào, trả về kiểu nào?
 10. Endpoint callback: tài liệu ghi phương thức GET nhưng ví dụ có thân JSON; và ghi mã HTTP 400/500 cho lỗi token, trong khi SDK trả HTTP 200 kèm `status_code` khác `"00"`. Viettel mong đợi điều nào?
 11. Viettel có gửi lại callback kết quả nếu phản hồi có `status_code` khác `"00"` không? (SDK trả `"02"` cho bản gửi trùng sau khi giao dịch đã hoàn tất.)

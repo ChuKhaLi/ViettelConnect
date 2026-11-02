@@ -56,15 +56,17 @@ try
 
     return 0;
 }
-catch (MySignTimeoutException)
+catch (MySignTimeoutException ex)
 {
-    Console.Error.WriteLine("Người ký không xác nhận kịp.");
+    // Ném ở cả chế độ Synchronous lẫn Polling.
+    Console.Error.WriteLine($"Người ký không xác nhận kịp (giao dịch: {ex.TransactionId ?? "-"}, correlation: {ex.CorrelationId}).");
     return 1;
 }
 catch (MySignException ex)
 {
     // Không in thông điệp lỗi thô của Viettel (chỉ hiện khi bật Errors.IncludeRawErrorMessage).
-    Console.Error.WriteLine($"Lỗi MySign [{ex.Category}] {ex.Detail} (correlation: {ex.CorrelationId})");
+    // TransactionId khác null nghĩa là Viettel đã nhận yêu cầu: đừng tự gửi lại, hãy đối soát theo mã giao dịch.
+    Console.Error.WriteLine($"Lỗi MySign [{ex.Category}] {ex.Detail} (giao dịch: {ex.TransactionId ?? "-"}, correlation: {ex.CorrelationId})");
     return 1;
 }
 
