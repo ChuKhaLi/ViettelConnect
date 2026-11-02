@@ -13,7 +13,15 @@ public sealed record PendingSignature(
     public override string ToString() => $"PendingSignature {{ TenantKey = {TenantKey}, Documents = {DocumentIds.Count} }}";
 }
 
-/// <summary>Kho giao dịch chờ, khoá theo (tenantKey, transactionId) để các lab không thấy giao dịch của nhau.</summary>
+/// <summary>
+/// Kho giao dịch chờ, khoá theo (tenantKey, transactionId) để các lab không thấy giao dịch của nhau.
+/// <para>
+/// Hợp đồng: với giao dịch lạ hoặc đã quá hạn, cài đặt <b>không được ném</b> — <see cref="FindAsync"/> trả <c>null</c>,
+/// <see cref="TryRemoveAsync"/> trả <c>false</c>. Ngoại lệ chỉ dành cho sự cố hạ tầng; khi đó endpoint callback trả
+/// HTTP 500 với thân chung (không lộ chi tiết) để Viettel gửi lại. Nên dọn giao dịch quá hạn (kho mặc định trong bộ
+/// nhớ dọn sau <c>Callback:PendingMaxAge</c>, mặc định 24 giờ).
+/// </para>
+/// </summary>
 public interface IPendingSignatureStore
 {
     ValueTask SaveAsync(PendingSignature p, CancellationToken ct);

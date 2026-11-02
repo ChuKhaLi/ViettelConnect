@@ -8,6 +8,8 @@ internal static class CallbackJson
 {
     private const string SuccessCode = "00";
     private const string SuccessMessage = "Thành công";
+    private const string ServerErrorCode = "99";
+    private const string ServerErrorMessage = "server_error";
 
     private static readonly JsonWriterOptions WriterOptions = new()
     {
@@ -16,6 +18,12 @@ internal static class CallbackJson
     };
 
     public static CallbackResponse Success() => Build(SuccessCode, SuccessMessage, null);
+
+    /// <summary>
+    /// Lỗi nội bộ phía đối tác (vd kho của ứng dụng ném lỗi): HTTP 500 với thân chung, không kèm chi tiết, để Viettel
+    /// gửi lại sau.
+    /// </summary>
+    public static CallbackResponse ServerError() => Build(ServerErrorCode, ServerErrorMessage, null, httpStatus: 500);
 
     /// <summary>Phản hồi lỗi chung, HTTP 200 (Viettel dừng luồng khi status_code khác "00"); không mô tả lý do chi tiết.</summary>
     public static CallbackResponse Failure(string code, string message) => Build(code, message, null);
@@ -46,7 +54,7 @@ internal static class CallbackJson
         };
     }
 
-    private static CallbackResponse Build(string code, string message, Action<Utf8JsonWriter>? writeData)
+    private static CallbackResponse Build(string code, string message, Action<Utf8JsonWriter>? writeData, int httpStatus = 200)
     {
         using var stream = new MemoryStream();
         using (var w = new Utf8JsonWriter(stream, WriterOptions))
@@ -58,6 +66,6 @@ internal static class CallbackJson
             w.WriteEndObject();
         }
 
-        return new CallbackResponse(200, System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+        return new CallbackResponse(httpStatus, System.Text.Encoding.UTF8.GetString(stream.ToArray()));
     }
 }

@@ -86,7 +86,9 @@ internal static class ServiceCollectionExtensions
         services.TryAddSingleton<IMySignCredentialsAccessor, OptionsMySignCredentialsAccessor>();
         services.TryAddSingleton<ISignAuthorizationProvider, MobileConfirmationAuthorizationProvider>();
         services.TryAddSingleton<ICallbackTokenStore, InMemoryCallbackTokenStore>();
-        services.TryAddSingleton<IPendingSignatureStore, InMemoryPendingSignatureStore>();
+        services.TryAddSingleton<IPendingSignatureStore>(sp => new InMemoryPendingSignatureStore(
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<IOptions<MySignOptions>>().Value.Callback.PendingMaxAge));
         services.TryAddSingleton<ICallbackClientResolver, OptionsCallbackClientResolver>();
         services.TryAddSingleton<SingleFlightRefresh>();
         services.TryAddSingleton(sp => BuildSigningSettings(sp.GetRequiredService<IOptions<MySignOptions>>().Value));
@@ -108,7 +110,8 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<ITokenCache>(),
             sp.GetRequiredService<SingleFlightRefresh>(),
             sp.GetRequiredService<TimeProvider>(),
-            sp.GetRequiredService<ICorrelationIdAccessor>()));
+            sp.GetRequiredService<ICorrelationIdAccessor>(),
+            sp.GetRequiredService<ILogger<MySignAuthHandler>>()));
 
         services
             .AddHttpClient<MySignWireClient>((sp, http) =>
@@ -130,12 +133,16 @@ internal static class ServiceCollectionExtensions
         services.TryAddScoped<PollSignStatus>();
         services.TryAddScoped<SignHashes>();
         services.TryAddScoped<BeginSignHashes>();
-        services.TryAddScoped<HandleCallbackResult>();
+        services.TryAddScoped(sp => new HandleCallbackResult(
+            sp.GetRequiredService<ICallbackTokenStore>(),
+            sp.GetRequiredService<IPendingSignatureStore>(),
+            sp.GetRequiredService<ILogger<HandleCallbackResult>>()));
         services.TryAddScoped(sp => new HandleCallbackTokenRequest(
             sp.GetRequiredService<ICallbackClientResolver>(),
             sp.GetRequiredService<ICallbackTokenStore>(),
             sp.GetRequiredService<IOptions<MySignOptions>>().Value.Callback.TokenLifetime,
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<HandleCallbackTokenRequest>>()));
     }
 
     /// <summary>Đánh dấu lõi đã được đăng ký.</summary>

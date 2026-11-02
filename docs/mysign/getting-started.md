@@ -42,6 +42,7 @@ dotnet user-secrets set "Viettel:MySign:UserId" "<user_id>"
 | `TransportRetry` | Số lần thử lại, độ trễ cho lỗi tạm thời (không áp dụng cho `signHash`). |
 | `Errors:IncludeRawErrorMessage` | Chỉ bật khi chẩn đoán; cho thông điệp lỗi thô của Viettel xuất hiện. |
 | `Callback:ClientId`, `ClientSecret`, `TokenLifetime` | Cặp client Viettel dùng khi gọi endpoint callback của bạn; token sống 1 giờ mặc định. |
+| `Callback:PendingMaxAge` | Thời gian kho giao dịch chờ mặc định (trong bộ nhớ) giữ một giao dịch callback chưa có kết quả; mặc định 24 giờ. |
 | `Advanced:PollingAsyncCode` | Tuỳ chọn ẩn, mặc định 2, chưa kiểm chứng (tài liệu Viettel ghi 1 ở một mục, 2 ở mục khác). |
 | `Advanced:HttpTimeout` | Thời gian chờ một lời gọi HTTP; mặc định `Polling:TotalTimeout` + 1 phút, không bao giờ vô hạn. |
 

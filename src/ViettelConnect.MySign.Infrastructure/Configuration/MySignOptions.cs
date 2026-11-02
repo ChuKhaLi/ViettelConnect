@@ -51,6 +51,12 @@ public sealed class CallbackOptions
     public string ClientId { get; set; } = string.Empty;
     public string ClientSecret { get; set; } = string.Empty;
     public TimeSpan TokenLifetime { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Thời gian tối đa kho giao dịch chờ mặc định (trong bộ nhớ) giữ một giao dịch callback chưa có kết quả; quá hạn thì
+    /// bị dọn và callback đến muộn bị từ chối như giao dịch lạ. Mặc định 24 giờ.
+    /// </summary>
+    public TimeSpan PendingMaxAge { get; set; } = TimeSpan.FromHours(24);
 }
 
 public sealed class AdvancedOptions

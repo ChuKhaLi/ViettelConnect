@@ -1,13 +1,18 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ViettelConnect.MySign.Application.Abstractions;
 
 namespace ViettelConnect.MySign.Application.UseCases;
 
 /// <summary>
 /// API xác thực của đối tác (tài liệu Viettel mục 3.1): Viettel gửi client_id/client_secret, đối tác trả access_token
-/// dùng cho lần báo kết quả. Mọi thất bại đều trả cùng một phản hồi chung (không lộ client nào tồn tại, không lộ lý do).
+/// dùng cho lần báo kết quả. Mọi thất bại do đầu vào (JSON hỏng, thiếu hoặc sai <c>grant_type</c> — bắt buộc đúng
+/// <c>client_credentials</c>, client lạ, sai secret) đều trả cùng một phản hồi chung "01 invalid_client" (không lộ client
+/// nào tồn tại, không lộ lý do). Lỗi của kho/resolver do ứng dụng cài (ném ngoại lệ) trả HTTP 500 với thân chung để
+/// Viettel thử lại; chỉ huỷ của người gọi mới được ném lại.
 /// </summary>
 internal sealed class HandleCallbackTokenRequest
 {
@@ -18,12 +23,14 @@ internal sealed class HandleCallbackTokenRequest
     private readonly ICallbackTokenStore _tokens;
     private readonly TimeSpan _tokenLifetime;
     private readonly TimeProvider _time;
+    private readonly ILogger _logger;
 
     public HandleCallbackTokenRequest(
         ICallbackClientResolver clients,
         ICallbackTokenStore tokens,
         TimeSpan tokenLifetime,
-        TimeProvider time)
+        TimeProvider time,
+        ILogger<HandleCallbackTokenRequest>? logger = null)
     {
         _clients = clients ?? throw new ArgumentNullException(nameof(clients));
         _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
@@ -34,9 +41,26 @@ internal sealed class HandleCallbackTokenRequest
 
         _tokenLifetime = tokenLifetime;
         _time = time ?? throw new ArgumentNullException(nameof(time));
+        _logger = logger ?? (ILogger)NullLogger.Instance;
     }
 
     public async Task<CallbackResponse> ExecuteAsync(string requestJson, CancellationToken ct)
+    {
+        try
+        {
+            return await ExecuteCoreAsync(requestJson, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!(ex is OperationCanceledException && ct.IsCancellationRequested))
+        {
+            // Chỉ ghi loại ngoại lệ: thông điệp của kho/resolver do ứng dụng viết có thể chứa secret hay chuỗi kết nối.
+            _logger.LogError(
+                "MySign callback token request failed in a store or client resolver ({ExceptionType}); returning HTTP 500 so Viettel can retry.",
+                ex.GetType().Name);
+            return CallbackJson.ServerError();
+        }
+    }
+
+    private async Task<CallbackResponse> ExecuteCoreAsync(string requestJson, CancellationToken ct)
     {
         if (!TryParse(requestJson, out var clientId, out var clientSecret))
         {
@@ -85,8 +109,9 @@ internal sealed class HandleCallbackTokenRequest
                 return false;
             }
 
+            // Tài liệu Viettel (mục 3.1) luôn gửi grant_type = client_credentials: thiếu hoặc khác đều bị từ chối.
             var grant = CallbackJson.ReadLooseString(root, "grant_type");
-            if (grant is not null && !string.Equals(grant, "client_credentials", StringComparison.Ordinal))
+            if (!string.Equals(grant, "client_credentials", StringComparison.Ordinal))
             {
                 return false;
             }

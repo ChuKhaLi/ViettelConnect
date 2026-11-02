@@ -57,6 +57,10 @@ internal sealed class MySignOptionsValidator : IValidateOptions<MySignOptions>
         {
             errors.Add($"{s}:Callback:TokenLifetime must be > 0.");
         }
+        if (options.Callback.PendingMaxAge <= TimeSpan.Zero)
+        {
+            errors.Add($"{s}:Callback:PendingMaxAge must be > 0.");
+        }
         // Cả hai trống = tắt callback (hợp lệ); chỉ một trong hai là cấu hình dở dang.
         if (string.IsNullOrWhiteSpace(options.Callback.ClientId) != string.IsNullOrWhiteSpace(options.Callback.ClientSecret))
         {

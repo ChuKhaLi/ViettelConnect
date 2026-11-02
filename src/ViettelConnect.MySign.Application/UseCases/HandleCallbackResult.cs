@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ViettelConnect.MySign.Application.Abstractions;
 using ViettelConnect.MySign.Application.Signing;
 using ViettelConnect.MySign.Domain.Signing;
@@ -8,8 +10,10 @@ namespace ViettelConnect.MySign.Application.UseCases;
 /// <summary>
 /// API nhận kết quả ký của đối tác (tài liệu Viettel mục 3.2). Đơn vị (tenant) chỉ được suy ra từ token đã xác thực;
 /// giao dịch chờ được tra theo (tenant, transaction_id) nên token của lab này không hoàn tất được giao dịch của lab khác.
-/// Mọi lỗi (token, JSON hỏng, giao dịch lạ, tập document không khớp) đều trả status_code khác "00" với HTTP 200,
-/// không ném, không mô tả chi tiết.
+/// Mọi lỗi do đầu vào (token, JSON hỏng, giao dịch lạ, tập document không khớp) đều trả status_code khác "00" với
+/// HTTP 200, không ném, không mô tả chi tiết. Lỗi của kho (ứng dụng tự cài <see cref="ICallbackTokenStore"/> hoặc
+/// <see cref="IPendingSignatureStore"/> và nó ném ngoại lệ) không ném ra ngoài mà trả HTTP 500 với thân chung để Viettel
+/// gửi lại; chỉ huỷ của người gọi mới được ném lại.
 /// </summary>
 internal sealed class HandleCallbackResult
 {
@@ -20,14 +24,38 @@ internal sealed class HandleCallbackResult
 
     private readonly ICallbackTokenStore _tokens;
     private readonly IPendingSignatureStore _pending;
+    private readonly ILogger _logger;
 
-    public HandleCallbackResult(ICallbackTokenStore tokens, IPendingSignatureStore pending)
+    public HandleCallbackResult(
+        ICallbackTokenStore tokens,
+        IPendingSignatureStore pending,
+        ILogger<HandleCallbackResult>? logger = null)
     {
         _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
         _pending = pending ?? throw new ArgumentNullException(nameof(pending));
+        _logger = logger ?? (ILogger)NullLogger.Instance;
     }
 
     public async Task<(CallbackResponse Response, CallbackSignOutcome? Outcome)> ExecuteAsync(
+        string? bearerToken,
+        string requestJson,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await ExecuteCoreAsync(bearerToken, requestJson, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!(ex is OperationCanceledException && ct.IsCancellationRequested))
+        {
+            // Chỉ ghi loại ngoại lệ: thông điệp của kho do ứng dụng viết có thể chứa token hay chuỗi kết nối.
+            _logger.LogError(
+                "MySign callback result handling failed in a store ({ExceptionType}); returning HTTP 500 so Viettel can retry.",
+                ex.GetType().Name);
+            return (CallbackJson.ServerError(), null);
+        }
+    }
+
+    private async Task<(CallbackResponse Response, CallbackSignOutcome? Outcome)> ExecuteCoreAsync(
         string? bearerToken,
         string requestJson,
         CancellationToken ct)

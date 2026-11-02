@@ -29,6 +29,19 @@ public sealed class MySignOptionsValidatorTests
         Assert.Equal(TimeSpan.FromSeconds(3), o.Polling.Interval);
         Assert.Equal(TimeSpan.FromMinutes(5), o.Polling.TotalTimeout);
         Assert.Equal(TimeSpan.FromHours(1), o.Callback.TokenLifetime);
+        Assert.Equal(TimeSpan.FromHours(24), o.Callback.PendingMaxAge);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Callback_pending_max_age_must_be_positive(int hours)
+    {
+        var o = Valid();
+        o.Callback.PendingMaxAge = TimeSpan.FromHours(hours);
+        var r = Run(o);
+        Assert.False(r.Succeeded);
+        Assert.Contains(r.Failures!, f => f.Contains("Callback:PendingMaxAge", StringComparison.Ordinal));
     }
 
     [Theory]

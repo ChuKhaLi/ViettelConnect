@@ -145,6 +145,135 @@ public sealed class HandleCallbackTests
         Assert.NotEqual("00", StatusCode(response));
     }
 
+    [Theory]
+    [InlineData("{\"client_id\":\"cb-a\",\"client_secret\":\"secret-a\"}")]
+    [InlineData("{\"grant_type\":null,\"client_id\":\"cb-a\",\"client_secret\":\"secret-a\"}")]
+    [InlineData("{\"grant_type\":\"\",\"client_id\":\"cb-a\",\"client_secret\":\"secret-a\"}")]
+    [InlineData("{\"grant_type\":\"password\",\"client_id\":\"cb-a\",\"client_secret\":\"secret-a\"}")]
+    [InlineData("{\"grant_type\":\"Client_Credentials\",\"client_id\":\"cb-a\",\"client_secret\":\"secret-a\"}")]
+    public async Task Token_request_requires_client_credentials_grant_type(string body)
+    {
+        var h = new Harness();
+
+        var response = await h.Token.ExecuteAsync(body, CancellationToken.None);
+
+        Assert.Equal(200, response.HttpStatus);
+        using var json = JsonDocument.Parse(response.JsonBody);
+        Assert.Equal("01", json.RootElement.GetProperty("status_code").GetString());
+        Assert.Equal("invalid_client", json.RootElement.GetProperty("message").GetString());
+        Assert.False(json.RootElement.TryGetProperty("data", out _));
+    }
+
+    // ---- store failures (A11) ----
+
+    private const string StoreSecretDetail = "db-password=hunter2 at Server=sql01";
+
+    private sealed class ThrowingTokenStore(bool throwOnIssue, bool throwOnValidate) : ICallbackTokenStore
+    {
+        public ValueTask<string> IssueAsync(string tenantKey, TimeSpan lifetime, CancellationToken ct) =>
+            throwOnIssue ? throw new InvalidOperationException(StoreSecretDetail) : ValueTask.FromResult("tok-" + tenantKey);
+
+        public ValueTask<string?> ValidateAsync(string token, CancellationToken ct) =>
+            throwOnValidate ? throw new InvalidOperationException(StoreSecretDetail) : ValueTask.FromResult<string?>("labA");
+    }
+
+    private sealed class ThrowingPendingStore(string failOn) : IPendingSignatureStore
+    {
+        public ValueTask SaveAsync(PendingSignature p, CancellationToken ct) => ValueTask.CompletedTask;
+
+        public ValueTask<PendingSignature?> FindAsync(string tenantKey, string transactionId, CancellationToken ct) =>
+            failOn == "find"
+                ? throw new TimeoutException(StoreSecretDetail)
+                : ValueTask.FromResult<PendingSignature?>(new PendingSignature(transactionId, tenantKey, Cert(), ["d1"], DateTimeOffset.UnixEpoch));
+
+        public ValueTask<bool> TryRemoveAsync(string tenantKey, string transactionId, CancellationToken ct) =>
+            failOn == "remove" ? throw new IOException(StoreSecretDetail) : ValueTask.FromResult(true);
+    }
+
+    private sealed class ThrowingResolver : ICallbackClientResolver
+    {
+        public ValueTask<CallbackClient?> FindAsync(string clientId, CancellationToken ct) =>
+            throw new InvalidOperationException(StoreSecretDetail);
+    }
+
+    private static void AssertGenericServerError(CallbackResponse response)
+    {
+        Assert.Equal(500, response.HttpStatus);
+        Assert.DoesNotContain("hunter2", response.JsonBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("sql01", response.JsonBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Exception", response.JsonBody, StringComparison.Ordinal);
+        using var json = JsonDocument.Parse(response.JsonBody);
+        Assert.NotEqual("00", json.RootElement.GetProperty("status_code").GetString());
+        Assert.False(json.RootElement.TryGetProperty("data", out _));
+    }
+
+    [Theory]
+    [InlineData("validate")]
+    [InlineData("find")]
+    [InlineData("remove")]
+    public async Task Throwing_store_during_result_callback_returns_generic_http_500_without_throwing(string failOn)
+    {
+        var tokens = new ThrowingTokenStore(throwOnIssue: false, throwOnValidate: failOn == "validate");
+        var handler = new HandleCallbackResult(tokens, new ThrowingPendingStore(failOn));
+
+        var (response, outcome) = await handler.ExecuteAsync("tok", ResultBody("tx-1", "1", ("d1", Sig("s1"))), CancellationToken.None);
+
+        AssertGenericServerError(response);
+        Assert.Null(outcome);
+    }
+
+    [Fact]
+    public async Task Throwing_token_store_during_token_request_returns_generic_http_500_without_throwing()
+    {
+        var handler = new HandleCallbackTokenRequest(
+            new ListResolver(new CallbackClient("labA", "cb-a", "secret-a")),
+            new ThrowingTokenStore(throwOnIssue: true, throwOnValidate: false),
+            Lifetime,
+            new FakeTimeProvider());
+
+        var response = await handler.ExecuteAsync(TokenBody("cb-a", "secret-a"), CancellationToken.None);
+
+        AssertGenericServerError(response);
+    }
+
+    [Fact]
+    public async Task Throwing_client_resolver_during_token_request_returns_generic_http_500_without_throwing()
+    {
+        var handler = new HandleCallbackTokenRequest(
+            new ThrowingResolver(),
+            new ThrowingTokenStore(throwOnIssue: false, throwOnValidate: false),
+            Lifetime,
+            new FakeTimeProvider());
+
+        var response = await handler.ExecuteAsync(TokenBody("cb-a", "secret-a"), CancellationToken.None);
+
+        AssertGenericServerError(response);
+    }
+
+    [Fact]
+    public async Task Caller_cancellation_is_still_propagated_from_callback_handlers()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var canceling = new CancelingTokenStore();
+        var result = new HandleCallbackResult(canceling, new ThrowingPendingStore("none"));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => result.ExecuteAsync("tok", ResultBody("tx-1", "1", ("d1", Sig("s1"))), cts.Token));
+    }
+
+    private sealed class CancelingTokenStore : ICallbackTokenStore
+    {
+        public ValueTask<string> IssueAsync(string tenantKey, TimeSpan lifetime, CancellationToken ct) =>
+            ValueTask.FromCanceled<string>(ct);
+
+        public ValueTask<string?> ValidateAsync(string token, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return ValueTask.FromResult<string?>("labA");
+        }
+    }
+
     // ---- result: happy path ----
 
     [Fact]
@@ -478,4 +607,55 @@ public sealed class HandleCallbackTests
         Assert.Null(await store.FindAsync("labA", "tx-7", CancellationToken.None));
         Assert.NotNull(await store.FindAsync("labB", "tx-7", CancellationToken.None));
     }
+
+    private static PendingSignature Pending(string tx, string tenant = "labA") =>
+        new(tx, tenant, Cert(), ["d"], DateTimeOffset.UnixEpoch);
+
+    [Fact]
+    public async Task Pending_store_expires_entries_after_the_default_24h_max_age_on_access()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero));
+        var store = new InMemoryPendingSignatureStore(time, InMemoryPendingSignatureStore.DefaultMaxAge);
+        Assert.Equal(TimeSpan.FromHours(24), InMemoryPendingSignatureStore.DefaultMaxAge);
+        await store.SaveAsync(Pending("tx-1"), CancellationToken.None);
+
+        time.Advance(TimeSpan.FromHours(24) - TimeSpan.FromSeconds(1));
+        Assert.NotNull(await store.FindAsync("labA", "tx-1", CancellationToken.None));
+
+        time.Advance(TimeSpan.FromSeconds(2));
+        Assert.Null(await store.FindAsync("labA", "tx-1", CancellationToken.None));
+        Assert.False(await store.TryRemoveAsync("labA", "tx-1", CancellationToken.None));
+        Assert.Equal(0, store.Count);
+    }
+
+    [Fact]
+    public async Task Pending_store_sweeps_expired_entries_periodically_without_access()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero));
+        var store = new InMemoryPendingSignatureStore(time, TimeSpan.FromHours(1));
+        await store.SaveAsync(Pending("old-1"), CancellationToken.None);
+        await store.SaveAsync(Pending("old-2", "labB"), CancellationToken.None);
+
+        time.Advance(TimeSpan.FromHours(2));
+        await store.SaveAsync(Pending("new-1"), CancellationToken.None);
+
+        Assert.Equal(1, store.Count);
+        Assert.NotNull(await store.FindAsync("labA", "new-1", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Pending_store_respects_a_configured_max_age()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero));
+        var store = new InMemoryPendingSignatureStore(time, TimeSpan.FromMinutes(10));
+        await store.SaveAsync(Pending("tx-1"), CancellationToken.None);
+
+        time.Advance(TimeSpan.FromMinutes(10) + TimeSpan.FromTicks(1));
+
+        Assert.Null(await store.FindAsync("labA", "tx-1", CancellationToken.None));
+    }
+
+    [Fact]
+    public void Pending_store_rejects_non_positive_max_age()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => new InMemoryPendingSignatureStore(new FakeTimeProvider(), TimeSpan.Zero));
 }
