@@ -76,3 +76,22 @@ Các điểm mở phát hiện trong lúc cài đặt:
 10. Endpoint callback: tài liệu ghi phương thức GET nhưng ví dụ có thân JSON; và ghi mã HTTP 400/500 cho lỗi token, trong khi SDK trả HTTP 200 kèm `status_code` khác `"00"`. Viettel mong đợi điều nào?
 11. Viettel có gửi lại callback kết quả nếu phản hồi có `status_code` khác `"00"` không? (SDK trả `"02"` cho bản gửi trùng sau khi giao dịch đã hoàn tất.)
 12. Lời gọi `signHash` đồng bộ chặn tối đa bao lâu? (Mặc định SDK đặt thời gian chờ HTTP = `Polling.TotalTimeout` + 1 phút.)
+
+### Đối chiếu với code demo của Viettel (Phụ lục 5 tài liệu v1.8)
+
+Đã đọc mã nguồn hai bản demo Viettel đính kèm tài liệu (.NET Framework và Java). Code demo không
+nằm trong repo này. Kết quả đối chiếu:
+
+- Khớp với SDK: đường dẫn `ras/v1/login`, `certificates/info`, `signHash`; tên trường đăng nhập và
+  ký (`client_id`, `client_secret`, `profile_id`, `user_id`, `credentialID`, `numSignatures`,
+  `documents`, `hash`, `hashAlgo`, `signAlgo`, `async`); `certificates: "chain"`, `certInfo`,
+  `authInfo`; phản hồi chứng thư là mảng; OID SHA-256/RSA; `document_name` là base64 của chuỗi
+  UTF-8; header `Authorization: Bearer`.
+- `document_id` (câu 9): cả hai demo đều gửi **số nguyên**, còn SDK đang gửi chuỗi do ứng dụng
+  đặt. Đây là điểm rủi ro nhất khi chạy thật — nếu Viettel đọc trường này kiểu số, chuỗi không
+  phải số sẽ bị từ chối. Cần chốt với Viettel hoặc thử ngay khi có tài khoản.
+- Số serial chứng thư trong demo là `serialNumber` (tài liệu ghi `SerialNumber`) — SDK đọc không
+  phân biệt hoa thường nên không ảnh hưởng. `expires_in` được demo đọc kiểu số; SDK chấp nhận cả số lẫn chuỗi.
+- Câu 12: demo chỉ dùng ký đồng bộ (`async = 0`) với thời gian chờ HTTP 120 giây.
+- Demo **không** dùng ký bất đồng bộ, `requests/status` hay callback, nên câu 7, 10, 11 vẫn chưa
+  có câu trả lời.
