@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ViettelConnect.MySign.Application</RootNamespace>
+    <AssemblyName>ViettelConnect.MySign.Application</AssemblyName>
+    <Description>Use cases and ports for Viettel MySign remote hash signing.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ViettelConnect.MySign.Domain\ViettelConnect.MySign.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ViettelConnect.MySign.Infrastructure" />
+    <InternalsVisibleTo Include="ViettelConnect.MySign.Client" />
+    <InternalsVisibleTo Include="ViettelConnect.MySign.UnitTests" />
+    <InternalsVisibleTo Include="ViettelConnect.MySign.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

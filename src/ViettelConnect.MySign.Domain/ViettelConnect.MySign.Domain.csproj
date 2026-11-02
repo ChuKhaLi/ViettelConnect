@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>ViettelConnect.MySign.Domain</RootNamespace>
+    <AssemblyName>ViettelConnect.MySign.Domain</AssemblyName>
+    <Description>Domain types for Viettel MySign remote hash signing.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>
