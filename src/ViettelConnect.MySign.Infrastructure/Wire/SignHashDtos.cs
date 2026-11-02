@@ -41,8 +41,9 @@ internal sealed class SignHashRequestDto
 
 internal sealed class SignHashDocumentDto
 {
+    /// <summary>Số thứ tự 1..n theo thứ tự gửi (JSON number, như code demo của Viettel); không phải DocumentId của ứng dụng.</summary>
     [JsonPropertyName("document_id")]
-    public string DocumentId { get; set; } = string.Empty;
+    public int DocumentId { get; set; }
 
     [JsonPropertyName("document_name")]
     public string DocumentName { get; set; } = string.Empty;

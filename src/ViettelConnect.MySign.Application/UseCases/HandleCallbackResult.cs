@@ -112,7 +112,11 @@ internal sealed class HandleCallbackResult
     private static (CallbackResponse Response, CallbackSignOutcome? Outcome) Reject(string code, string message) =>
         (CallbackJson.Failure(code, message), null);
 
-    /// <summary>Tập document_id trong kết quả phải khớp tuyệt đối với tập đã gửi; trả chữ ký theo thứ tự đã gửi.</summary>
+    /// <summary>
+    /// SDK đánh số tài liệu 1..n theo thứ tự gửi (xem <see cref="SignHashesSupport"/>), nên document_id trong kết quả là
+    /// số (hoặc chuỗi số) k tương ứng <c>pending.DocumentIds[k-1]</c>. Tập id phải khớp tuyệt đối: ngoài khoảng, không
+    /// phải số, trùng hay thiếu đều bị từ chối. Trả chữ ký theo thứ tự đã gửi, kèm DocumentId của ứng dụng.
+    /// </summary>
     private static bool TryMatchSignatures(
         PendingSignature pending,
         IReadOnlyList<(string DocumentId, string Signature)> results,
@@ -124,19 +128,25 @@ internal sealed class HandleCallbackResult
             return false;
         }
 
-        var byId = new Dictionary<string, string>(StringComparer.Ordinal);
+        var encodedByPosition = new string?[pending.DocumentIds.Count];
         foreach (var (id, signature) in results)
         {
-            if (!byId.TryAdd(id, signature))
+            if (id.Length > 1 && id[0] == '0'
+                || !int.TryParse(id, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var wireId)
+                || wireId < 1
+                || wireId > encodedByPosition.Length
+                || encodedByPosition[wireId - 1] is not null)
             {
                 return false;
             }
+
+            encodedByPosition[wireId - 1] = signature;
         }
 
         var ordered = new DocumentSignature[pending.DocumentIds.Count];
         for (var i = 0; i < ordered.Length; i++)
         {
-            if (!byId.TryGetValue(pending.DocumentIds[i], out var encoded))
+            if (encodedByPosition[i] is not { } encoded)
             {
                 return false;
             }

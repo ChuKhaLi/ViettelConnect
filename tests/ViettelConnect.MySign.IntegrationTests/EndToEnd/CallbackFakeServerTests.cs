@@ -146,7 +146,7 @@ public class CallbackFakeServerTests
         return sb.ToString();
     }
 
-    private static string ResultBody(string tx, string status, params (string Id, byte[] Signature)[] results) =>
+    private static string ResultBody(string tx, string status, params (int Id, byte[] Signature)[] results) =>
         JsonSerializer.Serialize(new
         {
             meta_data = new { request_id = "VIETTEL_" + tx, transaction_id = tx, description = "Ký thành công", status },
@@ -178,6 +178,9 @@ public class CallbackFakeServerTests
         using (var sent = Assert.Single(fake.RequestsFor("signHash")).Json())
         {
             Assert.Equal(3, sent.RootElement.GetProperty("async").GetInt32());
+            var wireIds = sent.RootElement.GetProperty("documents").EnumerateArray().Select(d => d.GetProperty("document_id")).ToArray();
+            Assert.All(wireIds, id => Assert.Equal(JsonValueKind.Number, id.ValueKind));
+            Assert.Equal([1, 2], wireIds.Select(id => id.GetInt32()));
         }
 
         Assert.Equal("tx-1", begun.TransactionId);
@@ -191,8 +194,8 @@ public class CallbackFakeServerTests
         var body = ResultBody(
             begun.TransactionId,
             "1",
-            ("b", FakeMySignServer.SignatureFor("b")),
-            ("a", FakeMySignServer.SignatureFor("a")));
+            (2, FakeMySignServer.SignatureFor("b")),
+            (1, FakeMySignServer.SignatureFor("a")));
         Assert.Contains("\\r\\n", body, StringComparison.Ordinal); // JSON-escaped CRLF thật sự có trong thân
         var (response, outcome) = await rig.Result.ExecuteAsync(token, body, CancellationToken.None);
 
@@ -215,9 +218,9 @@ public class CallbackFakeServerTests
         var tokenA = await rig.TokenFor("cb-a", "secret-a");
 
         var (cross, crossOutcome) = await rig.Result.ExecuteAsync(
-            tokenA, ResultBody(b.TransactionId, "1", ("a", FakeMySignServer.SignatureFor("a"))), CancellationToken.None);
+            tokenA, ResultBody(b.TransactionId, "1", (1, FakeMySignServer.SignatureFor("a"))), CancellationToken.None);
         var (own, ownOutcome) = await rig.Result.ExecuteAsync(
-            tokenA, ResultBody(a.TransactionId, "1", ("a", FakeMySignServer.SignatureFor("a"))), CancellationToken.None);
+            tokenA, ResultBody(a.TransactionId, "1", (1, FakeMySignServer.SignatureFor("a"))), CancellationToken.None);
 
         Assert.NotEqual("00", StatusCode(cross));
         Assert.Null(crossOutcome);

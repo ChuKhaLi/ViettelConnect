@@ -65,7 +65,7 @@ internal static class SignHashesSupport
         new(
             certificate.CredentialId,
             request.Documents
-                .Select(d => (d.DocumentId, DisplayLabelEncoder.Encode(d.DisplayName, d.DocumentId), d.Sha256))
+                .Select(d => (DisplayLabelEncoder.Encode(d.DisplayName, d.DocumentId), d.Sha256))
                 .ToArray(),
             string.IsNullOrWhiteSpace(request.Description) ? null : DisplayLabelEncoder.Encode(request.Description, fallback: null),
             asyncCode,

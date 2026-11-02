@@ -112,7 +112,7 @@ internal sealed class MySignWireClient : IMySignWireClient
             NumSignatures = r.Documents.Count,
             Description = r.EncodedDescription,
             Documents = r.Documents
-                .Select(d => new SignHashDocumentDto { DocumentId = d.DocumentId, DocumentName = d.EncodedName })
+                .Select((d, i) => new SignHashDocumentDto { DocumentId = i + 1, DocumentName = d.EncodedName })
                 .ToList(),
             Hash = r.Documents.Select(d => Convert.ToBase64String(d.Sha256)).ToList(),
             HashAlgo = HashAlgoOid,
