@@ -20,5 +20,6 @@ public interface IPendingSignatureStore
 
     ValueTask<PendingSignature?> FindAsync(string tenantKey, string transactionId, CancellationToken ct);
 
-    ValueTask RemoveAsync(string tenantKey, string transactionId, CancellationToken ct);
+    /// <summary>Xoá nguyên tử; trả <c>true</c> chỉ cho đúng một người gọi thắng (dùng để chống hoàn tất trùng lặp).</summary>
+    ValueTask<bool> TryRemoveAsync(string tenantKey, string transactionId, CancellationToken ct);
 }

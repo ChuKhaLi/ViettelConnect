@@ -19,8 +19,8 @@ internal sealed class OptionsCallbackClientResolver : ICallbackClientResolver
     public ValueTask<CallbackClient?> FindAsync(string clientId, CancellationToken ct)
     {
         var callback = _options.Value.Callback;
-        if (string.IsNullOrEmpty(callback.ClientId)
-            || string.IsNullOrEmpty(callback.ClientSecret)
+        if (string.IsNullOrWhiteSpace(callback.ClientId)
+            || string.IsNullOrWhiteSpace(callback.ClientSecret)
             || !string.Equals(callback.ClientId, clientId, StringComparison.Ordinal))
         {
             return ValueTask.FromResult<CallbackClient?>(null);

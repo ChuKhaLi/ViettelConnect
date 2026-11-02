@@ -72,7 +72,12 @@ internal sealed class HandleCallbackResult
                 return (CallbackJson.Success(), new CallbackSignOutcome(tenantKey, pending.TransactionId, status, signatures, body.Status));
         }
 
-        await _pending.RemoveAsync(tenantKey, pending.TransactionId, ct).ConfigureAwait(false);
+        // Chỉ người thắng cuộc đua xoá mới phát Outcome; bản gửi trùng nhận "00" (idempotent) nhưng không có Outcome.
+        if (!await _pending.TryRemoveAsync(tenantKey, pending.TransactionId, ct).ConfigureAwait(false))
+        {
+            return (CallbackJson.Success(), null);
+        }
+
         return (CallbackJson.Success(), new CallbackSignOutcome(tenantKey, pending.TransactionId, status, signatures, body.Status));
     }
 

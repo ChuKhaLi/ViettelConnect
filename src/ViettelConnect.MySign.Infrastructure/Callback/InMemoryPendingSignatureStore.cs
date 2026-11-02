@@ -19,9 +19,6 @@ internal sealed class InMemoryPendingSignatureStore : IPendingSignatureStore
         ValueTask.FromResult(
             _items.TryGetValue((tenantKey, transactionId), out var p) ? p : null);
 
-    public ValueTask RemoveAsync(string tenantKey, string transactionId, CancellationToken ct)
-    {
-        _items.TryRemove((tenantKey, transactionId), out _);
-        return ValueTask.CompletedTask;
-    }
+    public ValueTask<bool> TryRemoveAsync(string tenantKey, string transactionId, CancellationToken ct) =>
+        ValueTask.FromResult(_items.TryRemove((tenantKey, transactionId), out _));
 }

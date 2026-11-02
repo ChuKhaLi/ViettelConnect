@@ -386,6 +386,62 @@ public sealed class HandleCallbackTests
             .FindAsync(string.Empty, CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData(" ", "sec")]
+    [InlineData("cb", "  ")]
+    [InlineData(" ", " ")]
+    public async Task Options_resolver_treats_whitespace_client_as_disabled(string id, string secret)
+    {
+        var resolver = new OptionsCallbackClientResolver(Options.Create(new MySignOptions
+        {
+            Callback = new CallbackOptions { ClientId = id, ClientSecret = secret },
+        }));
+
+        Assert.Null(await resolver.FindAsync(id, CancellationToken.None));
+    }
+
+    private sealed class GatedPendingStore(IPendingSignatureStore inner) : IPendingSignatureStore
+    {
+        private readonly TaskCompletionSource _gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _finds;
+
+        public ValueTask SaveAsync(PendingSignature p, CancellationToken ct) => inner.SaveAsync(p, ct);
+
+        public async ValueTask<PendingSignature?> FindAsync(string tenantKey, string transactionId, CancellationToken ct)
+        {
+            var found = await inner.FindAsync(tenantKey, transactionId, ct);
+
+            // Cả hai lần giao đều phải qua Find trước khi bất kỳ bên nào được xoá.
+            if (Interlocked.Increment(ref _finds) == 2)
+            {
+                _gate.SetResult();
+            }
+
+            await _gate.Task;
+            return found;
+        }
+
+        public ValueTask<bool> TryRemoveAsync(string tenantKey, string transactionId, CancellationToken ct) =>
+            inner.TryRemoveAsync(tenantKey, transactionId, ct);
+    }
+
+    [Fact]
+    public async Task Concurrent_duplicate_delivery_yields_exactly_one_outcome_and_both_get_ok()
+    {
+        var h = new Harness();
+        await h.Seed("labA", "tx-1", "d1");
+        var token = await h.TokenFor("cb-a", "secret-a");
+        var body = ResultBody("tx-1", "1", ("d1", Sig("s")));
+        var handler = new HandleCallbackResult(h.Tokens, new GatedPendingStore(h.Pending));
+
+        var results = await Task.WhenAll(
+            Task.Run(() => handler.ExecuteAsync(token, body, CancellationToken.None)),
+            Task.Run(() => handler.ExecuteAsync(token, body, CancellationToken.None)));
+
+        Assert.All(results, r => Assert.Equal("00", StatusCode(r.Response)));
+        Assert.Single(results, r => r.Outcome is not null);
+    }
+
     [Fact]
     public async Task Token_store_issues_distinct_long_random_urlsafe_tokens_bound_to_tenant()
     {
@@ -417,7 +473,8 @@ public sealed class HandleCallbackTests
 
         Assert.Equal(["d"], (await store.FindAsync("labA", "tx-7", CancellationToken.None))!.DocumentIds);
         Assert.Equal(["e"], (await store.FindAsync("labB", "tx-7", CancellationToken.None))!.DocumentIds);
-        await store.RemoveAsync("labA", "tx-7", CancellationToken.None);
+        Assert.True(await store.TryRemoveAsync("labA", "tx-7", CancellationToken.None));
+        Assert.False(await store.TryRemoveAsync("labA", "tx-7", CancellationToken.None));
         Assert.Null(await store.FindAsync("labA", "tx-7", CancellationToken.None));
         Assert.NotNull(await store.FindAsync("labB", "tx-7", CancellationToken.None));
     }
